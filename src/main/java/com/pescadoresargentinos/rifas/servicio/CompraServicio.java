@@ -1,0 +1,300 @@
+package com.pescadoresargentinos.rifas.servicio;
+
+import com.pescadoresargentinos.rifas.api.dto.CompraResponse;
+import com.pescadoresargentinos.rifas.api.dto.CrearCompraRequest;
+import com.pescadoresargentinos.rifas.dominio.Compra;
+import com.pescadoresargentinos.rifas.dominio.Comprador;
+import com.pescadoresargentinos.rifas.dominio.EstadoCompra;
+import com.pescadoresargentinos.rifas.dominio.EstadoNumero;
+import com.pescadoresargentinos.rifas.dominio.EstadoRifa;
+import com.pescadoresargentinos.rifas.dominio.NumeroRifa;
+import com.pescadoresargentinos.rifas.dominio.Rifa;
+import com.pescadoresargentinos.rifas.repositorio.CompraRepositorio;
+import com.pescadoresargentinos.rifas.repositorio.NumeroRifaRepositorio;
+import com.pescadoresargentinos.rifas.repositorio.RifaRepositorio;
+import com.pescadoresargentinos.rifas.seguridad.UsuarioActual;
+import com.pescadoresargentinos.rifas.servicio.storage.ComprobanteArchivo;
+import com.pescadoresargentinos.rifas.servicio.storage.ComprobanteGuardado;
+import com.pescadoresargentinos.rifas.servicio.storage.ComprobanteStorage;
+import java.net.URI;
+import java.time.LocalDateTime;
+import java.util.Comparator;
+import java.util.List;
+import java.util.Optional;
+import org.springframework.scheduling.annotation.Scheduled;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
+
+@Service
+public class CompraServicio {
+
+    private final CompraRepositorio compraRepositorio;
+    private final RifaRepositorio rifaRepositorio;
+    private final NumeroRifaRepositorio numeroRifaRepositorio;
+    private final UsuarioActual usuarioActual;
+    private final ComprobanteStorage comprobanteStorage;
+
+    public CompraServicio(
+            CompraRepositorio compraRepositorio,
+            RifaRepositorio rifaRepositorio,
+            NumeroRifaRepositorio numeroRifaRepositorio,
+            UsuarioActual usuarioActual,
+            ComprobanteStorage comprobanteStorage
+    ) {
+        this.compraRepositorio = compraRepositorio;
+        this.rifaRepositorio = rifaRepositorio;
+        this.numeroRifaRepositorio = numeroRifaRepositorio;
+        this.usuarioActual = usuarioActual;
+        this.comprobanteStorage = comprobanteStorage;
+    }
+
+    @Transactional
+    public CompraResponse crear(Long rifaId, CrearCompraRequest request) {
+        Rifa rifa = rifaRepositorio.findById(rifaId)
+                .orElseThrow(() -> new IllegalArgumentException("No existe la rifa " + rifaId));
+        if (rifa.getEstado() != EstadoRifa.PUBLICADA) {
+            throw new IllegalStateException("La rifa no esta disponible para compras");
+        }
+
+        List<Integer> valores = request.numeros().stream().distinct().sorted().toList();
+        if (valores.size() != request.numeros().size()) {
+            throw new IllegalArgumentException("Hay numeros repetidos en la compra");
+        }
+        validarRango(rifa, valores);
+
+        List<NumeroRifa> numeros = numeroRifaRepositorio.findByRifaIdAndValorIn(rifaId, valores);
+        if (numeros.size() != valores.size()) {
+            throw new IllegalArgumentException("Uno o mas numeros no existen");
+        }
+        numeros.forEach(numero -> {
+            if (numero.getEstado() != EstadoNumero.DISPONIBLE) {
+                throw new IllegalStateException("El numero " + numero.getEtiqueta() + " ya no esta disponible");
+            }
+        });
+
+        Comprador comprador = new Comprador();
+        comprador.setNombre(request.nombre());
+        comprador.setDni(request.dni());
+        comprador.setTelefono(normalizarTelefono(request.telefono()));
+
+        Compra compra = new Compra();
+        compra.setRifa(rifa);
+        compra.setComprador(comprador);
+        compra.setTotal(rifa.getValorNumero().multiply(java.math.BigDecimal.valueOf(numeros.size())));
+        compra.setFechaExpiracion(LocalDateTime.now().plusMinutes(5));
+        compra = compraRepositorio.save(compra);
+
+        for (NumeroRifa numero : numeros) {
+            numero.setEstado(EstadoNumero.PENDIENTE);
+            numero.setCompra(compra);
+            compra.getNumeros().add(numero);
+            compra.getEtiquetasNumeros().add(etiquetaCompra(numero));
+        }
+
+        return aResponse(compra);
+    }
+
+    @Transactional
+    public CompraResponse crearPorSlug(String slug, CrearCompraRequest request) {
+        Rifa rifa = rifaRepositorio.findBySlug(slug)
+                .orElseThrow(() -> new IllegalArgumentException("No existe la rifa " + slug));
+        return crear(rifa.getId(), request);
+    }
+
+    @Transactional(readOnly = true)
+    public List<CompraResponse> listar(EstadoCompra estado) {
+        Long clienteId = usuarioActual.clienteId();
+        List<Compra> compras = estado == null
+                ? compraRepositorio.findByRifaClienteIdOrderByFechaCreacionDesc(clienteId)
+                : compraRepositorio.findByRifaClienteIdAndEstadoOrderByFechaCreacionDesc(clienteId, estado);
+        return compras.stream().map(this::aResponse).toList();
+    }
+
+    @Transactional
+    public CompraResponse aprobar(Long compraId) {
+        Compra compra = buscarCompra(compraId);
+        validarPropiedad(compra);
+        if (compra.getEstado() != EstadoCompra.PENDIENTE_PAGO) {
+            throw new IllegalStateException("Solo se pueden aprobar compras pendientes");
+        }
+        compra.setEstado(EstadoCompra.APROBADA);
+        compra.setFechaResolucion(LocalDateTime.now());
+        compra.getNumeros().forEach(numero -> numero.setEstado(EstadoNumero.VENDIDO));
+        return aResponse(compra);
+    }
+
+    @Transactional
+    public CompraResponse cancelar(Long compraId) {
+        Compra compra = buscarCompra(compraId);
+        validarPropiedad(compra);
+        if (compra.getEstado() != EstadoCompra.PENDIENTE_PAGO) {
+            throw new IllegalStateException("Solo se pueden cancelar compras pendientes");
+        }
+        cancelarPendiente(compra);
+        return aResponse(compra);
+    }
+
+    @Transactional
+    public CompraResponse cargarComprobante(Long compraId, MultipartFile archivo) {
+        Compra compra = buscarCompra(compraId);
+        cancelarSiVencidaSinComprobante(compra);
+        if (compra.getEstado() != EstadoCompra.PENDIENTE_PAGO) {
+            throw new IllegalStateException("Solo se puede cargar comprobante en compras pendientes");
+        }
+        if (archivo == null || archivo.isEmpty()) {
+            throw new IllegalArgumentException("El comprobante es obligatorio");
+        }
+
+        validarArchivoComprobante(archivo);
+        ComprobanteGuardado comprobante = comprobanteStorage.guardar(compraId, archivo);
+        compra.setComprobanteArchivo(comprobante.referencia());
+        compra.setComprobanteNombreOriginal(comprobante.nombreOriginal());
+        compra.setComprobanteContentType(comprobante.contentType());
+        return aResponse(compra);
+    }
+
+    @Transactional
+    public CompraResponse marcarComprobanteEnviadoPorWhatsapp(Long compraId) {
+        Compra compra = buscarCompra(compraId);
+        cancelarSiVencidaSinComprobante(compra);
+        if (compra.getEstado() != EstadoCompra.PENDIENTE_PAGO) {
+            throw new IllegalStateException("Solo se puede informar comprobante en compras pendientes");
+        }
+        compra.setComprobanteWhatsapp(true);
+        return aResponse(compra);
+    }
+
+    @Transactional
+    public CompraResponse expirarSiVencida(Long compraId) {
+        Compra compra = buscarCompra(compraId);
+        cancelarSiVencidaSinComprobante(compra);
+        return aResponse(compra);
+    }
+
+    @Transactional(readOnly = true)
+    public Optional<URI> urlDescargaComprobante(Long compraId) {
+        Compra compra = buscarCompra(compraId);
+        validarPropiedad(compra);
+        validarTieneComprobanteArchivo(compra);
+        return comprobanteStorage.urlDescarga(compra.getComprobanteArchivo(), compra.getComprobanteNombreOriginal());
+    }
+
+    @Transactional(readOnly = true)
+    public ComprobanteArchivo abrirComprobante(Long compraId) {
+        Compra compra = buscarCompra(compraId);
+        validarPropiedad(compra);
+        validarTieneComprobanteArchivo(compra);
+        return comprobanteStorage.abrir(
+                        compra.getComprobanteArchivo(),
+                        compra.getComprobanteNombreOriginal(),
+                        compra.getComprobanteContentType()
+                )
+                .orElseThrow(() -> new IllegalArgumentException("No se encontro el comprobante"));
+    }
+
+    @Scheduled(fixedDelayString = "${app.compras.expiracion-check-ms:30000}")
+    @Transactional
+    public void cancelarPendientesVencidas() {
+        compraRepositorio.findByEstadoAndComprobanteArchivoIsNullAndComprobanteWhatsappFalseAndFechaExpiracionBefore(EstadoCompra.PENDIENTE_PAGO, LocalDateTime.now())
+                .forEach(this::cancelarPendiente);
+    }
+
+    private void validarRango(Rifa rifa, List<Integer> valores) {
+        valores.forEach(valor -> {
+            Integer minimo = rifa.getCantidadNumeros().equals(rifa.getCantidadFilas()) ? 0 : 1;
+            Integer maximo = rifa.getCantidadNumeros().equals(rifa.getCantidadFilas())
+                    ? rifa.getCantidadFilas() - 1
+                    : rifa.getCantidadFilas();
+            if (valor < minimo || valor > maximo) {
+                throw new IllegalArgumentException("El numero " + valor + " esta fuera del rango de la rifa");
+            }
+        });
+    }
+
+    private void cancelarSiVencidaSinComprobante(Compra compra) {
+        if (compra.getEstado() == EstadoCompra.PENDIENTE_PAGO
+                && compra.getComprobanteArchivo() == null
+                && !Boolean.TRUE.equals(compra.getComprobanteWhatsapp())
+                && compra.getFechaExpiracion().isBefore(LocalDateTime.now())) {
+            cancelarPendiente(compra);
+        }
+    }
+
+    private void cancelarPendiente(Compra compra) {
+        compra.setEstado(EstadoCompra.CANCELADA);
+        compra.setFechaResolucion(LocalDateTime.now());
+        compra.getNumeros().forEach(numero -> {
+            numero.setEstado(EstadoNumero.DISPONIBLE);
+            numero.setCompra(null);
+        });
+        compra.getNumeros().clear();
+    }
+
+    private Compra buscarCompra(Long compraId) {
+        return compraRepositorio.findById(compraId)
+                .orElseThrow(() -> new IllegalArgumentException("No existe la compra " + compraId));
+    }
+
+    private void validarArchivoComprobante(MultipartFile archivo) {
+        String contentType = archivo.getContentType() == null ? "" : archivo.getContentType();
+        if (!contentType.startsWith("image/") && !contentType.equals("application/pdf")) {
+            throw new IllegalArgumentException("El comprobante debe ser una imagen o PDF");
+        }
+        if (archivo.getSize() > 5 * 1024 * 1024) {
+            throw new IllegalArgumentException("El comprobante no puede superar 5 MB");
+        }
+    }
+
+    private void validarTieneComprobanteArchivo(Compra compra) {
+        if (compra.getComprobanteArchivo() == null || compra.getComprobanteArchivo().isBlank()) {
+            throw new IllegalArgumentException("La compra no tiene comprobante cargado");
+        }
+    }
+
+    private void validarPropiedad(Compra compra) {
+        Long clienteId = usuarioActual.clienteId();
+        if (clienteId == null || compra.getRifa().getCliente() == null || !compra.getRifa().getCliente().getId().equals(clienteId)) {
+            throw new SecurityException("No tenes permiso para operar esta compra");
+        }
+    }
+
+    private CompraResponse aResponse(Compra compra) {
+        List<String> numeros = compra.getNumeros().stream()
+                .sorted(Comparator.comparing(NumeroRifa::getValor))
+                .map(this::etiquetaCompra)
+                .toList();
+        if (numeros.isEmpty()) {
+            numeros = compra.getEtiquetasNumeros().stream().sorted().toList();
+        }
+
+        return new CompraResponse(
+                compra.getId(),
+                compra.getRifa().getId(),
+                compra.getRifa().getTitulo(),
+                compra.getComprador().getNombre(),
+                compra.getComprador().getDni(),
+                compra.getComprador().getTelefono(),
+                numeros,
+                compra.getTotal(),
+                compra.getEstado(),
+                compra.getFechaCreacion(),
+                compra.getFechaExpiracion(),
+                compra.getComprobanteArchivo(),
+                compra.getComprobanteWhatsapp(),
+                compra.getRifa().getAliasTransferencia(),
+                compra.getRifa().getWhatsappComprobante()
+        );
+    }
+
+    private String etiquetaCompra(NumeroRifa numero) {
+        if (numero.getNumerosIncluidos().size() <= 1) {
+            return numero.getEtiqueta();
+        }
+        return numero.getEtiqueta() + " (" + String.join("-", numero.getNumerosIncluidos()) + ")";
+    }
+
+    private String normalizarTelefono(String telefono) {
+        return telefono.replace("+", "");
+    }
+}

@@ -1,0 +1,14 @@
+target/
+.mvn/
+*.iml
+.idea/
+.vscode/
+.env
+.env.*
+!.env.example
+*.log
+*.stdout.log
+*.stderr.log
+uploads/
+src/main/resources/application-local.properties
+src/main/resources/application-*.local.properties
