@@ -14,7 +14,9 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
 
 @RestController
 @RequestMapping("/api/super-admin/clientes")
@@ -50,5 +52,13 @@ public class SuperAdminClienteController {
             @Valid @RequestBody ActualizarEstadoClienteRequest request
     ) {
         return clienteServicio.actualizarEstado(id, request);
+    }
+
+    @PostMapping("/{id}/logo")
+    public ClienteResponse subirLogo(
+            @PathVariable Long id,
+            @RequestPart("archivo") MultipartFile archivo
+    ) {
+        return clienteServicio.subirLogoCliente(id, archivo);
     }
 }

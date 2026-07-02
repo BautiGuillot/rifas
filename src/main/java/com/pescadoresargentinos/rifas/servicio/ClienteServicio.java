@@ -141,6 +141,15 @@ public class ClienteServicio {
         return aResponse(cliente, usuario);
     }
 
+    @Transactional
+    public ClienteResponse subirLogoCliente(Long id, org.springframework.web.multipart.MultipartFile archivo) {
+        Cliente cliente = buscarCliente(id);
+        MediaGuardado guardado = mediaStorage.guardarImagen("logos", cliente.getId(), archivo);
+        cliente.setLogoUrl(guardado.url());
+        Usuario usuario = usuarioRepositorio.findByClienteId(cliente.getId()).orElse(null);
+        return aResponse(cliente, usuario);
+    }
+
     private Cliente buscarCliente(Long id) {
         return clienteRepositorio.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("No existe el cliente " + id));
