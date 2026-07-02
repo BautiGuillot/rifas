@@ -20,6 +20,9 @@ public interface CompraRepositorio extends JpaRepository<Compra, Long> {
 
     boolean existsByRifaId(Long rifaId);
 
+    @EntityGraph(attributePaths = {"rifa", "comprador", "numeros"})
+    List<Compra> findByRifaId(Long rifaId);
+
     List<Compra> findByRifaIdAndEstado(Long rifaId, EstadoCompra estado);
 
     @EntityGraph(attributePaths = {"rifa", "comprador", "numeros"})

@@ -247,6 +247,26 @@ public class RifaServicio {
         return detalle(id);
     }
 
+    @Transactional
+    public void eliminar(Long id) {
+        Rifa rifa = buscarRifa(id);
+        validarPropiedad(rifa);
+        if (rifa.getEstado() != EstadoRifa.CANCELADA) {
+            throw new IllegalStateException("Solo se pueden eliminar rifas canceladas");
+        }
+
+        List<Compra> compras = compraRepositorio.findByRifaId(id);
+        compras.forEach(compra -> {
+            compra.getNumeros().forEach(numero -> {
+                numero.setCompra(null);
+                numero.setEstado(EstadoNumero.DISPONIBLE);
+            });
+            compra.getNumeros().clear();
+        });
+        compraRepositorio.deleteAll(compras);
+        rifaRepositorio.delete(rifa);
+    }
+
     @Transactional(readOnly = true)
     public DashboardAdminResponse dashboard() {
         Long clienteId = usuarioActual.clienteId();

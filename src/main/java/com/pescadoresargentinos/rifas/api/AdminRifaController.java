@@ -9,6 +9,8 @@ import com.pescadoresargentinos.rifas.api.dto.RifaResumenResponse;
 import com.pescadoresargentinos.rifas.servicio.RifaServicio;
 import jakarta.validation.Valid;
 import java.util.List;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -69,6 +71,12 @@ public class AdminRifaController {
     @PatchMapping("/{id}/cancelar")
     public RifaDetalleResponse cancelar(@PathVariable Long id) {
         return rifaServicio.cancelar(id);
+    }
+
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Void> eliminar(@PathVariable Long id) {
+        rifaServicio.eliminar(id);
+        return ResponseEntity.noContent().build();
     }
 
     @PostMapping("/{id}/ganadores")
