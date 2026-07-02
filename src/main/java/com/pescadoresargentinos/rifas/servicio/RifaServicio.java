@@ -179,7 +179,9 @@ public class RifaServicio {
     public RifaDetalleResponse detallePublicoPorSlug(String slug) {
         Rifa rifa = rifaRepositorio.findBySlug(slug)
                 .orElseThrow(() -> new IllegalArgumentException("No existe la rifa " + slug));
-        if (rifa.getEstado() != EstadoRifa.PUBLICADA && rifa.getEstado() != EstadoRifa.FINALIZADA) {
+        if (rifa.getEstado() != EstadoRifa.PUBLICADA
+                && rifa.getEstado() != EstadoRifa.FINALIZADA
+                && rifa.getEstado() != EstadoRifa.CANCELADA) {
             throw new IllegalStateException("La rifa todavia no esta publicada");
         }
         return detalle(rifa.getId());
@@ -203,6 +205,18 @@ public class RifaServicio {
         if (rifa.getEstado() != EstadoRifa.PUBLICADA) {
             throw new IllegalStateException("Solo se pueden finalizar rifas publicadas");
         }
+        rifa.setEstado(EstadoRifa.FINALIZADA);
+        return detalle(id);
+    }
+
+    @Transactional
+    public RifaDetalleResponse finalizarConGanadores(Long id, CargarGanadoresRequest request) {
+        Rifa rifa = buscarRifa(id);
+        validarPropiedad(rifa);
+        if (rifa.getEstado() != EstadoRifa.PUBLICADA) {
+            throw new IllegalStateException("Solo se pueden finalizar rifas publicadas");
+        }
+        validarYGuardarGanadores(rifa, request);
         rifa.setEstado(EstadoRifa.FINALIZADA);
         return detalle(id);
     }
@@ -258,6 +272,12 @@ public class RifaServicio {
         if (rifa.getEstado() != EstadoRifa.FINALIZADA) {
             throw new IllegalStateException("La rifa debe estar finalizada para cargar ganadores");
         }
+        validarYGuardarGanadores(rifa, request);
+        return detalle(id);
+    }
+
+    private void validarYGuardarGanadores(Rifa rifa, CargarGanadoresRequest request) {
+        Long id = rifa.getId();
         if (request.ganadores().size() != rifa.getCantidadGanadores()) {
             throw new IllegalArgumentException("La cantidad de ganadores debe coincidir con la rifa");
         }
@@ -289,8 +309,6 @@ public class RifaServicio {
             ganador.setNumero(numero);
             ganadorRepositorio.save(ganador);
         });
-
-        return detalle(id);
     }
 
     private void validarPremios(CrearRifaRequest request) {

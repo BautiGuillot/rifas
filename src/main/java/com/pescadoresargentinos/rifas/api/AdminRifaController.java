@@ -58,6 +58,14 @@ public class AdminRifaController {
         return rifaServicio.finalizar(id);
     }
 
+    @PostMapping("/{id}/finalizar-con-ganadores")
+    public RifaDetalleResponse finalizarConGanadores(
+            @PathVariable Long id,
+            @Valid @RequestBody CargarGanadoresRequest request
+    ) {
+        return rifaServicio.finalizarConGanadores(id, request);
+    }
+
     @PatchMapping("/{id}/cancelar")
     public RifaDetalleResponse cancelar(@PathVariable Long id) {
         return rifaServicio.cancelar(id);
