@@ -205,8 +205,7 @@ public class RifaServicio {
         if (rifa.getEstado() != EstadoRifa.PUBLICADA) {
             throw new IllegalStateException("Solo se pueden finalizar rifas publicadas");
         }
-        rifa.setEstado(EstadoRifa.FINALIZADA);
-        return detalle(id);
+        throw new IllegalStateException("Para finalizar la rifa tenes que cargar los ganadores");
     }
 
     @Transactional
@@ -216,6 +215,7 @@ public class RifaServicio {
         if (rifa.getEstado() != EstadoRifa.PUBLICADA) {
             throw new IllegalStateException("Solo se pueden finalizar rifas publicadas");
         }
+        validarTodosLosNumerosVendidos(rifa);
         validarYGuardarGanadores(rifa, request);
         rifa.setEstado(EstadoRifa.FINALIZADA);
         return detalle(id);
@@ -329,6 +329,14 @@ public class RifaServicio {
             ganador.setNumero(numero);
             ganadorRepositorio.save(ganador);
         });
+    }
+
+    private void validarTodosLosNumerosVendidos(Rifa rifa) {
+        boolean hayNoVendidos = numeroRifaRepositorio.findByRifaIdOrderByValorAsc(rifa.getId()).stream()
+                .anyMatch(numero -> numero.getEstado() != EstadoNumero.VENDIDO);
+        if (hayNoVendidos) {
+            throw new IllegalStateException("Para finalizar la rifa todos los numeros deben estar vendidos");
+        }
     }
 
     private void validarPremios(CrearRifaRequest request) {
