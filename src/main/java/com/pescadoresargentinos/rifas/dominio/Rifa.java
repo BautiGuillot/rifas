@@ -37,6 +37,9 @@ public class Rifa {
     @Column(length = 2000)
     private String descripcion;
 
+    @Column(length = 2000)
+    private String aclaracionSorteo;
+
     @Column(nullable = false)
     private Integer cantidadNumeros;
 
@@ -107,6 +110,14 @@ public class Rifa {
 
     public void setDescripcion(String descripcion) {
         this.descripcion = descripcion;
+    }
+
+    public String getAclaracionSorteo() {
+        return aclaracionSorteo;
+    }
+
+    public void setAclaracionSorteo(String aclaracionSorteo) {
+        this.aclaracionSorteo = aclaracionSorteo;
     }
 
     public Integer getCantidadNumeros() {

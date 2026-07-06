@@ -76,6 +76,7 @@ public class RifaServicio {
         rifa.setTitulo(request.titulo());
         rifa.setSlug(request.slug());
         rifa.setDescripcion(request.descripcion());
+        rifa.setAclaracionSorteo(normalizarTextoOpcional(request.aclaracionSorteo()));
         rifa.setCantidadNumeros(request.cantidadNumeros());
         rifa.setCantidadFilas(request.cantidadFilas());
         rifa.setCantidadGanadores(request.cantidadGanadores());
@@ -119,6 +120,7 @@ public class RifaServicio {
         rifa.setTitulo(request.titulo());
         rifa.setSlug(request.slug());
         rifa.setDescripcion(request.descripcion());
+        rifa.setAclaracionSorteo(normalizarTextoOpcional(request.aclaracionSorteo()));
         rifa.setCantidadNumeros(request.cantidadNumeros());
         rifa.setCantidadFilas(request.cantidadFilas());
         rifa.setCantidadGanadores(request.cantidadGanadores());
@@ -435,6 +437,7 @@ public class RifaServicio {
                 rifa.getCliente() == null ? null : rifa.getCliente().getColorPrincipal(),
                 rifa.getCliente() == null ? null : rifa.getCliente().getLogoUrl(),
                 rifa.getDescripcion(),
+                rifa.getAclaracionSorteo(),
                 rifa.getCantidadNumeros(),
                 rifa.getCantidadFilas(),
                 rifa.getCantidadGanadores(),
@@ -457,6 +460,7 @@ public class RifaServicio {
                 rifa.getCliente() == null ? null : rifa.getCliente().getColorPrincipal(),
                 rifa.getCliente() == null ? null : rifa.getCliente().getLogoUrl(),
                 rifa.getDescripcion(),
+                rifa.getAclaracionSorteo(),
                 rifa.getCantidadNumeros(),
                 rifa.getCantidadFilas(),
                 rifa.getCantidadGanadores(),

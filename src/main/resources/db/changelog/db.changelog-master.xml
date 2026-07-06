@@ -290,4 +290,10 @@
             <column name="imagen_url" type="VARCHAR(1024)"/>
         </addColumn>
     </changeSet>
+
+    <changeSet id="009-add-rifa-aclaracion-sorteo" author="codex">
+        <addColumn tableName="rifa">
+            <column name="aclaracion_sorteo" type="VARCHAR(2000)"/>
+        </addColumn>
+    </changeSet>
 </databaseChangeLog>

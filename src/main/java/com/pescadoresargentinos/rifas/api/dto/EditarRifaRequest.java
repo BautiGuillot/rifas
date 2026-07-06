@@ -15,6 +15,7 @@ public record EditarRifaRequest(
         @NotBlank String titulo,
         @NotBlank @Pattern(regexp = "^[a-z0-9-]{3,80}$") String slug,
         String descripcion,
+        String aclaracionSorteo,
         @NotNull @Min(1) Integer cantidadNumeros,
         @NotNull @Min(1) Integer cantidadFilas,
         @NotNull @Min(1) Integer cantidadGanadores,

@@ -14,6 +14,7 @@ public record RifaDetalleResponse(
         String clienteColorPrincipal,
         String clienteLogoUrl,
         String descripcion,
+        String aclaracionSorteo,
         Integer cantidadNumeros,
         Integer cantidadFilas,
         Integer cantidadGanadores,
