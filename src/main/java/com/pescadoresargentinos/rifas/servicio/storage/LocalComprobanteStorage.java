@@ -37,6 +37,20 @@ public class LocalComprobanteStorage implements ComprobanteStorage {
     }
 
     @Override
+    public ComprobanteGuardado guardar(Long compraId, String nombreOriginal, String contentType, byte[] contenido) {
+        try {
+            Files.createDirectories(comprobantesPath);
+            String nombreSeguro = nombreSeguro(nombreOriginal);
+            String nombreArchivo = compraId + "-" + UUID.randomUUID() + extension(nombreSeguro);
+            Path destino = comprobantesPath.resolve(nombreArchivo).normalize();
+            Files.write(destino, contenido);
+            return new ComprobanteGuardado(destino.toString(), nombreSeguro, contentType);
+        } catch (IOException ex) {
+            throw new IllegalStateException("No se pudo guardar el comprobante");
+        }
+    }
+
+    @Override
     public Optional<URI> urlDescarga(String referencia, String nombreOriginal) {
         return Optional.empty();
     }
@@ -63,5 +77,11 @@ public class LocalComprobanteStorage implements ComprobanteStorage {
     private String extension(String nombreOriginal) {
         int punto = nombreOriginal.lastIndexOf('.');
         return punto >= 0 ? nombreOriginal.substring(punto).toLowerCase() : "";
+    }
+
+    private String nombreSeguro(String nombreOriginal) {
+        return nombreOriginal == null || nombreOriginal.isBlank()
+                ? "comprobante"
+                : nombreOriginal.replace("\"", "");
     }
 }

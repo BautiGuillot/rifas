@@ -56,6 +56,8 @@ public class ClienteServicio {
         cliente.setSlug(request.slug());
         cliente.setColorPrincipal(normalizarColor(request.colorPrincipal()));
         cliente.setLogoUrl(normalizarTextoOpcional(request.logoUrl()));
+        aplicarConfiguracionWhatsapp(cliente, request.twilioWhatsappHabilitado(), request.twilioWhatsappFrom(),
+                request.twilioMessagingServiceSid(), request.twilioContentSid(), request.whatsappConsultas());
         cliente.setEstado(EstadoCliente.ACTIVO);
         cliente = clienteRepositorio.save(cliente);
 
@@ -100,6 +102,8 @@ public class ClienteServicio {
         cliente.setSlug(request.slug());
         cliente.setColorPrincipal(normalizarColor(request.colorPrincipal()));
         cliente.setLogoUrl(normalizarTextoOpcional(request.logoUrl()));
+        aplicarConfiguracionWhatsapp(cliente, request.twilioWhatsappHabilitado(), request.twilioWhatsappFrom(),
+                request.twilioMessagingServiceSid(), request.twilioContentSid(), request.whatsappConsultas());
         usuario.setUsername(request.username());
         if (request.password() != null && !request.password().isBlank()) {
             usuario.setPassword(passwordEncoder.encode(request.password()));
@@ -128,6 +132,8 @@ public class ClienteServicio {
         Cliente cliente = buscarClienteActual();
         cliente.setColorPrincipal(normalizarColor(request.colorPrincipal()));
         cliente.setLogoUrl(normalizarTextoOpcional(request.logoUrl()));
+        aplicarConfiguracionWhatsapp(cliente, request.twilioWhatsappHabilitado(), request.twilioWhatsappFrom(),
+                request.twilioMessagingServiceSid(), request.twilioContentSid(), request.whatsappConsultas());
         Usuario usuario = usuarioRepositorio.findByClienteId(cliente.getId()).orElse(null);
         return aResponse(cliente, usuario);
     }
@@ -170,10 +176,30 @@ public class ClienteServicio {
                 cliente.getSlug(),
                 cliente.getColorPrincipal(),
                 cliente.getLogoUrl(),
+                cliente.getTwilioWhatsappHabilitado(),
+                cliente.getTwilioWhatsappFrom(),
+                cliente.getTwilioMessagingServiceSid(),
+                cliente.getTwilioContentSid(),
+                cliente.getWhatsappConsultas(),
                 cliente.getEstado(),
                 usuario == null ? null : usuario.getUsername(),
                 cliente.getFechaAlta()
         );
+    }
+
+    private void aplicarConfiguracionWhatsapp(
+            Cliente cliente,
+            Boolean habilitado,
+            String from,
+            String messagingServiceSid,
+            String contentSid,
+            String consultas
+    ) {
+        cliente.setTwilioWhatsappHabilitado(Boolean.TRUE.equals(habilitado));
+        cliente.setTwilioWhatsappFrom(normalizarTelefonoWhatsapp(from));
+        cliente.setTwilioMessagingServiceSid(normalizarTextoOpcional(messagingServiceSid));
+        cliente.setTwilioContentSid(normalizarTextoOpcional(contentSid));
+        cliente.setWhatsappConsultas(normalizarTelefonoWhatsapp(consultas));
     }
 
     private String normalizarColor(String colorPrincipal) {
@@ -182,5 +208,14 @@ public class ClienteServicio {
 
     private String normalizarTextoOpcional(String valor) {
         return valor == null || valor.isBlank() ? null : valor.trim();
+    }
+
+    private String normalizarTelefonoWhatsapp(String telefono) {
+        String valor = normalizarTextoOpcional(telefono);
+        if (valor == null) {
+            return null;
+        }
+        String normalizado = valor.replace("whatsapp:", "").replace("+", "").replaceAll("\\D", "");
+        return normalizado.isBlank() ? null : normalizado;
     }
 }

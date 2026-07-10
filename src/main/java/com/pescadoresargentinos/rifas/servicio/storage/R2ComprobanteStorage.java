@@ -63,6 +63,20 @@ public class R2ComprobanteStorage implements ComprobanteStorage {
     }
 
     @Override
+    public ComprobanteGuardado guardar(Long compraId, String nombreOriginal, String contentType, byte[] contenido) {
+        String nombreSeguro = nombreSeguro(nombreOriginal);
+        String key = "comprobantes/" + compraId + "/" + UUID.randomUUID() + extension(nombreSeguro);
+        PutObjectRequest request = PutObjectRequest.builder()
+                .bucket(bucket)
+                .key(key)
+                .contentType(contentType)
+                .metadata(java.util.Map.of("nombre-original", nombreSeguro))
+                .build();
+        s3Client.putObject(request, RequestBody.fromBytes(contenido));
+        return new ComprobanteGuardado(key, nombreSeguro, contentType);
+    }
+
+    @Override
     public Optional<URI> urlDescarga(String referencia, String nombreOriginal) {
         return Optional.empty();
     }

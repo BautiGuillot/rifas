@@ -16,6 +16,8 @@ import com.pescadoresargentinos.rifas.seguridad.UsuarioActual;
 import com.pescadoresargentinos.rifas.servicio.storage.ComprobanteArchivo;
 import com.pescadoresargentinos.rifas.servicio.storage.ComprobanteGuardado;
 import com.pescadoresargentinos.rifas.servicio.storage.ComprobanteStorage;
+import com.pescadoresargentinos.rifas.servicio.twilio.TwilioEnvioResultado;
+import com.pescadoresargentinos.rifas.servicio.twilio.TwilioWhatsappServicio;
 import java.net.URI;
 import java.time.LocalDateTime;
 import java.util.Comparator;
@@ -34,19 +36,22 @@ public class CompraServicio {
     private final NumeroRifaRepositorio numeroRifaRepositorio;
     private final UsuarioActual usuarioActual;
     private final ComprobanteStorage comprobanteStorage;
+    private final TwilioWhatsappServicio twilioWhatsappServicio;
 
     public CompraServicio(
             CompraRepositorio compraRepositorio,
             RifaRepositorio rifaRepositorio,
             NumeroRifaRepositorio numeroRifaRepositorio,
             UsuarioActual usuarioActual,
-            ComprobanteStorage comprobanteStorage
+            ComprobanteStorage comprobanteStorage,
+            TwilioWhatsappServicio twilioWhatsappServicio
     ) {
         this.compraRepositorio = compraRepositorio;
         this.rifaRepositorio = rifaRepositorio;
         this.numeroRifaRepositorio = numeroRifaRepositorio;
         this.usuarioActual = usuarioActual;
         this.comprobanteStorage = comprobanteStorage;
+        this.twilioWhatsappServicio = twilioWhatsappServicio;
     }
 
     @Transactional
@@ -91,6 +96,8 @@ public class CompraServicio {
             compra.getNumeros().add(numero);
             compra.getEtiquetasNumeros().add(etiquetaCompra(numero));
         }
+
+        registrarEnvioWhatsappAutomatico(compra);
 
         return aResponse(compra);
     }
@@ -166,6 +173,37 @@ public class CompraServicio {
     }
 
     @Transactional
+    public boolean registrarComprobanteDesdeWhatsapp(Long compraId, String nombreOriginal, String contentType, byte[] contenido) {
+        Compra compra = buscarCompra(compraId);
+        cancelarSiVencidaSinComprobante(compra);
+        if (compra.getEstado() != EstadoCompra.PENDIENTE_PAGO) {
+            return false;
+        }
+        validarArchivoComprobante(contentType, contenido == null ? 0 : contenido.length);
+        ComprobanteGuardado comprobante = comprobanteStorage.guardar(compraId, nombreOriginal, contentType, contenido);
+        compra.setComprobanteArchivo(comprobante.referencia());
+        compra.setComprobanteNombreOriginal(comprobante.nombreOriginal());
+        compra.setComprobanteContentType(comprobante.contentType());
+        compra.setComprobanteWhatsapp(true);
+        return true;
+    }
+
+    @Transactional
+    public Optional<Compra> buscarCompraPendientePorWhatsapp(String twilioFrom, String compradorTelefono) {
+        return compraRepositorio.findFirstByRifaClienteTwilioWhatsappFromAndCompradorTelefonoAndEstadoOrderByFechaCreacionDesc(
+                normalizarTelefono(twilioFrom),
+                normalizarTelefono(compradorTelefono),
+                EstadoCompra.PENDIENTE_PAGO
+        );
+    }
+
+    @Transactional(readOnly = true)
+    public Optional<Compra> buscarCompraPendientePorId(Long compraId) {
+        return compraRepositorio.findById(compraId)
+                .filter(compra -> compra.getEstado() == EstadoCompra.PENDIENTE_PAGO);
+    }
+
+    @Transactional
     public CompraResponse expirarSiVencida(Long compraId) {
         Compra compra = buscarCompra(compraId);
         cancelarSiVencidaSinComprobante(compra);
@@ -238,10 +276,18 @@ public class CompraServicio {
 
     private void validarArchivoComprobante(MultipartFile archivo) {
         String contentType = archivo.getContentType() == null ? "" : archivo.getContentType();
-        if (!contentType.startsWith("image/") && !contentType.equals("application/pdf")) {
+        validarArchivoComprobante(contentType, archivo.getSize());
+    }
+
+    private void validarArchivoComprobante(String contentType, long size) {
+        String tipo = contentType == null ? "" : contentType;
+        if (!tipo.startsWith("image/") && !tipo.equals("application/pdf")) {
             throw new IllegalArgumentException("El comprobante debe ser una imagen o PDF");
         }
-        if (archivo.getSize() > 5 * 1024 * 1024) {
+        if (size <= 0) {
+            throw new IllegalArgumentException("El comprobante es obligatorio");
+        }
+        if (size > 5 * 1024 * 1024) {
             throw new IllegalArgumentException("El comprobante no puede superar 5 MB");
         }
     }
@@ -282,6 +328,10 @@ public class CompraServicio {
                 compra.getFechaExpiracion(),
                 compra.getComprobanteArchivo(),
                 compra.getComprobanteWhatsapp(),
+                compra.getTwilioMensajeSid(),
+                compra.getWhatsappAutomaticoEstado(),
+                compra.getWhatsappAutomaticoError(),
+                compra.getFechaWhatsappAutomatico(),
                 compra.getRifa().getAliasTransferencia(),
                 compra.getRifa().getWhatsappComprobante()
         );
@@ -295,6 +345,14 @@ public class CompraServicio {
     }
 
     private String normalizarTelefono(String telefono) {
-        return telefono.replace("+", "");
+        return telefono == null ? "" : telefono.replace("whatsapp:", "").replace("+", "").replaceAll("\\D", "");
+    }
+
+    private void registrarEnvioWhatsappAutomatico(Compra compra) {
+        TwilioEnvioResultado resultado = twilioWhatsappServicio.enviarMensajeCompra(compra);
+        compra.setWhatsappAutomaticoEstado(resultado.estado());
+        compra.setTwilioMensajeSid(resultado.messageSid());
+        compra.setWhatsappAutomaticoError(resultado.error());
+        compra.setFechaWhatsappAutomatico(LocalDateTime.now());
     }
 }

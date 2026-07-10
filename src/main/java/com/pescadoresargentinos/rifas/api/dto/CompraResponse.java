@@ -19,6 +19,10 @@ public record CompraResponse(
         LocalDateTime fechaExpiracion,
         String comprobanteArchivo,
         Boolean comprobanteWhatsapp,
+        String twilioMensajeSid,
+        String whatsappAutomaticoEstado,
+        String whatsappAutomaticoError,
+        LocalDateTime fechaWhatsappAutomatico,
         String aliasTransferencia,
         String whatsappComprobante
 ) {

@@ -8,6 +8,8 @@ public interface ComprobanteStorage {
 
     ComprobanteGuardado guardar(Long compraId, MultipartFile archivo);
 
+    ComprobanteGuardado guardar(Long compraId, String nombreOriginal, String contentType, byte[] contenido);
+
     Optional<URI> urlDescarga(String referencia, String nombreOriginal);
 
     Optional<ComprobanteArchivo> abrir(String referencia, String nombreOriginal, String contentType);

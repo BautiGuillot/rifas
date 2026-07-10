@@ -9,6 +9,11 @@ public record ClienteResponse(
         String slug,
         String colorPrincipal,
         String logoUrl,
+        Boolean twilioWhatsappHabilitado,
+        String twilioWhatsappFrom,
+        String twilioMessagingServiceSid,
+        String twilioContentSid,
+        String whatsappConsultas,
         EstadoCliente estado,
         String username,
         LocalDateTime fechaAlta

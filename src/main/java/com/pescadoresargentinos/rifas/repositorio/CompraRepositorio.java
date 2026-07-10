@@ -5,6 +5,7 @@ import com.pescadoresargentinos.rifas.dominio.EstadoCompra;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
@@ -31,6 +32,13 @@ public interface CompraRepositorio extends JpaRepository<Compra, Long> {
     List<Compra> findByRifaClienteIdOrderByFechaCreacionDesc(Long clienteId);
 
     List<Compra> findByRifaClienteIdAndEstadoOrderByFechaCreacionDesc(Long clienteId, EstadoCompra estado);
+
+    @EntityGraph(attributePaths = {"rifa", "rifa.cliente", "comprador", "numeros"})
+    Optional<Compra> findFirstByRifaClienteTwilioWhatsappFromAndCompradorTelefonoAndEstadoOrderByFechaCreacionDesc(
+            String twilioWhatsappFrom,
+            String telefono,
+            EstadoCompra estado
+    );
 
     long countByEstado(EstadoCompra estado);
 

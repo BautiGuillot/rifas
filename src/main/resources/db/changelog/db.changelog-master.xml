@@ -296,4 +296,28 @@
             <column name="aclaracion_sorteo" type="VARCHAR(2000)"/>
         </addColumn>
     </changeSet>
+
+    <changeSet id="010-add-cliente-twilio-whatsapp" author="codex">
+        <addColumn tableName="cliente">
+            <column name="twilio_whatsapp_habilitado" type="BOOLEAN" defaultValueBoolean="false">
+                <constraints nullable="false"/>
+            </column>
+            <column name="twilio_whatsapp_from" type="VARCHAR(32)"/>
+            <column name="twilio_messaging_service_sid" type="VARCHAR(64)"/>
+            <column name="twilio_content_sid" type="VARCHAR(64)"/>
+            <column name="whatsapp_consultas" type="VARCHAR(32)"/>
+        </addColumn>
+    </changeSet>
+
+    <changeSet id="011-add-compra-whatsapp-automatico" author="codex">
+        <addColumn tableName="compra">
+            <column name="twilio_mensaje_sid" type="VARCHAR(64)"/>
+            <column name="whatsapp_automatico_estado" type="VARCHAR(32)"/>
+            <column name="whatsapp_automatico_error" type="VARCHAR(1000)"/>
+            <column name="fecha_whatsapp_automatico" type="TIMESTAMP"/>
+        </addColumn>
+        <createIndex tableName="compra" indexName="idx_compra_twilio_mensaje_sid">
+            <column name="twilio_mensaje_sid"/>
+        </createIndex>
+    </changeSet>
 </databaseChangeLog>

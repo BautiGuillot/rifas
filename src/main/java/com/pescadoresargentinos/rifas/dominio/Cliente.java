@@ -27,6 +27,17 @@ public class Cliente {
 
     private String logoUrl;
 
+    @Column(nullable = false)
+    private Boolean twilioWhatsappHabilitado = false;
+
+    private String twilioWhatsappFrom;
+
+    private String twilioMessagingServiceSid;
+
+    private String twilioContentSid;
+
+    private String whatsappConsultas;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private EstadoCliente estado = EstadoCliente.ACTIVO;
@@ -68,6 +79,46 @@ public class Cliente {
 
     public void setLogoUrl(String logoUrl) {
         this.logoUrl = logoUrl;
+    }
+
+    public Boolean getTwilioWhatsappHabilitado() {
+        return twilioWhatsappHabilitado;
+    }
+
+    public void setTwilioWhatsappHabilitado(Boolean twilioWhatsappHabilitado) {
+        this.twilioWhatsappHabilitado = twilioWhatsappHabilitado;
+    }
+
+    public String getTwilioWhatsappFrom() {
+        return twilioWhatsappFrom;
+    }
+
+    public void setTwilioWhatsappFrom(String twilioWhatsappFrom) {
+        this.twilioWhatsappFrom = twilioWhatsappFrom;
+    }
+
+    public String getTwilioMessagingServiceSid() {
+        return twilioMessagingServiceSid;
+    }
+
+    public void setTwilioMessagingServiceSid(String twilioMessagingServiceSid) {
+        this.twilioMessagingServiceSid = twilioMessagingServiceSid;
+    }
+
+    public String getTwilioContentSid() {
+        return twilioContentSid;
+    }
+
+    public void setTwilioContentSid(String twilioContentSid) {
+        this.twilioContentSid = twilioContentSid;
+    }
+
+    public String getWhatsappConsultas() {
+        return whatsappConsultas;
+    }
+
+    public void setWhatsappConsultas(String whatsappConsultas) {
+        this.whatsappConsultas = whatsappConsultas;
     }
 
     public EstadoCliente getEstado() {

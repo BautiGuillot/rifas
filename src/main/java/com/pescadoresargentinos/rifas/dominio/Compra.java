@@ -63,6 +63,15 @@ public class Compra {
     @Column(nullable = false)
     private Boolean comprobanteWhatsapp = false;
 
+    private String twilioMensajeSid;
+
+    private String whatsappAutomaticoEstado;
+
+    @Column(length = 1000)
+    private String whatsappAutomaticoError;
+
+    private LocalDateTime fechaWhatsappAutomatico;
+
     public Long getId() {
         return id;
     }
@@ -157,5 +166,37 @@ public class Compra {
 
     public void setComprobanteWhatsapp(Boolean comprobanteWhatsapp) {
         this.comprobanteWhatsapp = comprobanteWhatsapp;
+    }
+
+    public String getTwilioMensajeSid() {
+        return twilioMensajeSid;
+    }
+
+    public void setTwilioMensajeSid(String twilioMensajeSid) {
+        this.twilioMensajeSid = twilioMensajeSid;
+    }
+
+    public String getWhatsappAutomaticoEstado() {
+        return whatsappAutomaticoEstado;
+    }
+
+    public void setWhatsappAutomaticoEstado(String whatsappAutomaticoEstado) {
+        this.whatsappAutomaticoEstado = whatsappAutomaticoEstado;
+    }
+
+    public String getWhatsappAutomaticoError() {
+        return whatsappAutomaticoError;
+    }
+
+    public void setWhatsappAutomaticoError(String whatsappAutomaticoError) {
+        this.whatsappAutomaticoError = whatsappAutomaticoError;
+    }
+
+    public LocalDateTime getFechaWhatsappAutomatico() {
+        return fechaWhatsappAutomatico;
+    }
+
+    public void setFechaWhatsappAutomatico(LocalDateTime fechaWhatsappAutomatico) {
+        this.fechaWhatsappAutomatico = fechaWhatsappAutomatico;
     }
 }
