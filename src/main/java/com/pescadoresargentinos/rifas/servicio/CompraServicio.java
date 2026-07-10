@@ -332,6 +332,11 @@ public class CompraServicio {
                 compra.getWhatsappAutomaticoEstado(),
                 compra.getWhatsappAutomaticoError(),
                 compra.getFechaWhatsappAutomatico(),
+                compra.getRifa().getAliasCobro() == null ? null : compra.getRifa().getAliasCobro().getId(),
+                compra.getRifa().getAliasCobro() == null ? null : compra.getRifa().getAliasCobro().getNombre(),
+                compra.getRifa().getAliasCobro() == null ? null : compra.getRifa().getAliasCobro().getEntidad(),
+                compra.getRifa().getAliasCobro() == null ? null : compra.getRifa().getAliasCobro().getTitular(),
+                compra.getRifa().getAliasCobro() == null ? null : compra.getRifa().getAliasCobro().getCbuCvu(),
                 compra.getRifa().getAliasTransferencia(),
                 compra.getRifa().getWhatsappComprobante()
         );

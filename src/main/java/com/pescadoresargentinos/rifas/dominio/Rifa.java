@@ -34,6 +34,10 @@ public class Rifa {
     @JoinColumn(name = "cliente_id")
     private Cliente cliente;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "alias_cobro_id")
+    private AliasCobro aliasCobro;
+
     @Column(length = 2000)
     private String descripcion;
 
@@ -102,6 +106,14 @@ public class Rifa {
 
     public void setCliente(Cliente cliente) {
         this.cliente = cliente;
+    }
+
+    public AliasCobro getAliasCobro() {
+        return aliasCobro;
+    }
+
+    public void setAliasCobro(AliasCobro aliasCobro) {
+        this.aliasCobro = aliasCobro;
     }
 
     public String getDescripcion() {

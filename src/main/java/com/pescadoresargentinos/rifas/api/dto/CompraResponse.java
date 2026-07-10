@@ -23,6 +23,11 @@ public record CompraResponse(
         String whatsappAutomaticoEstado,
         String whatsappAutomaticoError,
         LocalDateTime fechaWhatsappAutomatico,
+        Long aliasCobroId,
+        String aliasCobroNombre,
+        String aliasCobroEntidad,
+        String aliasCobroTitular,
+        String aliasCobroCbuCvu,
         String aliasTransferencia,
         String whatsappComprobante
 ) {

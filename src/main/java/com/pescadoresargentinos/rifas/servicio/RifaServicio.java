@@ -9,6 +9,7 @@ import com.pescadoresargentinos.rifas.api.dto.NumeroResponse;
 import com.pescadoresargentinos.rifas.api.dto.PremioResponse;
 import com.pescadoresargentinos.rifas.api.dto.RifaDetalleResponse;
 import com.pescadoresargentinos.rifas.api.dto.RifaResumenResponse;
+import com.pescadoresargentinos.rifas.dominio.AliasCobro;
 import com.pescadoresargentinos.rifas.dominio.Compra;
 import com.pescadoresargentinos.rifas.dominio.Cliente;
 import com.pescadoresargentinos.rifas.dominio.EstadoCliente;
@@ -38,6 +39,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class RifaServicio {
 
     private final RifaRepositorio rifaRepositorio;
+    private final AliasCobroServicio aliasCobroServicio;
     private final NumeroRifaRepositorio numeroRifaRepositorio;
     private final PremioRepositorio premioRepositorio;
     private final GanadorRepositorio ganadorRepositorio;
@@ -47,6 +49,7 @@ public class RifaServicio {
 
     public RifaServicio(
             RifaRepositorio rifaRepositorio,
+            AliasCobroServicio aliasCobroServicio,
             NumeroRifaRepositorio numeroRifaRepositorio,
             PremioRepositorio premioRepositorio,
             GanadorRepositorio ganadorRepositorio,
@@ -55,6 +58,7 @@ public class RifaServicio {
             UsuarioActual usuarioActual
     ) {
         this.rifaRepositorio = rifaRepositorio;
+        this.aliasCobroServicio = aliasCobroServicio;
         this.numeroRifaRepositorio = numeroRifaRepositorio;
         this.premioRepositorio = premioRepositorio;
         this.ganadorRepositorio = ganadorRepositorio;
@@ -81,7 +85,7 @@ public class RifaServicio {
         rifa.setCantidadFilas(request.cantidadFilas());
         rifa.setCantidadGanadores(request.cantidadGanadores());
         rifa.setValorNumero(request.valorNumero());
-        rifa.setAliasTransferencia(request.aliasTransferencia());
+        aplicarAliasCobro(rifa, cliente.getId(), request.aliasCobroId(), request.aliasTransferencia());
         rifa.setWhatsappComprobante(normalizarTelefono(request.whatsappComprobante()));
         rifa.setFechaSorteo(request.fechaSorteo());
 
@@ -125,7 +129,7 @@ public class RifaServicio {
         rifa.setCantidadFilas(request.cantidadFilas());
         rifa.setCantidadGanadores(request.cantidadGanadores());
         rifa.setValorNumero(request.valorNumero());
-        rifa.setAliasTransferencia(request.aliasTransferencia());
+        aplicarAliasCobro(rifa, rifa.getCliente().getId(), request.aliasCobroId(), request.aliasTransferencia());
         rifa.setWhatsappComprobante(normalizarTelefono(request.whatsappComprobante()));
         rifa.setFechaSorteo(request.fechaSorteo());
 
@@ -428,6 +432,7 @@ public class RifaServicio {
 
     private RifaResumenResponse aResumen(Rifa rifa) {
         List<Ganador> ganadores = ganadorRepositorio.findByRifaIdOrderByPosicionAsc(rifa.getId());
+        AliasCobro aliasCobro = aliasCobroEfectivo(rifa);
         return new RifaResumenResponse(
                 rifa.getId(),
                 rifa.getTitulo(),
@@ -442,6 +447,12 @@ public class RifaServicio {
                 rifa.getCantidadFilas(),
                 rifa.getCantidadGanadores(),
                 rifa.getValorNumero(),
+                aliasCobro == null ? null : aliasCobro.getId(),
+                aliasCobro == null ? null : aliasCobro.getNombre(),
+                aliasCobro == null ? null : aliasCobro.getEntidad(),
+                aliasCobro == null ? null : aliasCobro.getTitular(),
+                aliasCobro == null ? null : aliasCobro.getCbuCvu(),
+                rifa.getAliasTransferencia(),
                 rifa.getEstado(),
                 rifa.getFechaCreacion(),
                 rifa.getFechaSorteo(),
@@ -451,6 +462,7 @@ public class RifaServicio {
     }
 
     private RifaDetalleResponse aDetalle(Rifa rifa, List<NumeroRifa> numeros, List<Ganador> ganadores) {
+        AliasCobro aliasCobro = aliasCobroEfectivo(rifa);
         return new RifaDetalleResponse(
                 rifa.getId(),
                 rifa.getTitulo(),
@@ -465,6 +477,11 @@ public class RifaServicio {
                 rifa.getCantidadFilas(),
                 rifa.getCantidadGanadores(),
                 rifa.getValorNumero(),
+                aliasCobro == null ? null : aliasCobro.getId(),
+                aliasCobro == null ? null : aliasCobro.getNombre(),
+                aliasCobro == null ? null : aliasCobro.getEntidad(),
+                aliasCobro == null ? null : aliasCobro.getTitular(),
+                aliasCobro == null ? null : aliasCobro.getCbuCvu(),
                 rifa.getAliasTransferencia(),
                 rifa.getWhatsappComprobante(),
                 rifa.getEstado(),
@@ -491,6 +508,30 @@ public class RifaServicio {
 
     private String normalizarTextoOpcional(String valor) {
         return valor == null || valor.isBlank() ? null : valor.trim();
+    }
+
+    private AliasCobro aliasCobroEfectivo(Rifa rifa) {
+        if (rifa.getAliasCobro() != null) {
+            return rifa.getAliasCobro();
+        }
+        Long clienteId = rifa.getCliente() == null ? null : rifa.getCliente().getId();
+        return aliasCobroServicio.buscarPorAlias(clienteId, rifa.getAliasTransferencia()).orElse(null);
+    }
+
+    private void aplicarAliasCobro(Rifa rifa, Long clienteId, Long aliasCobroId, String aliasTransferencia) {
+        if (aliasCobroId != null) {
+            AliasCobro aliasCobro = aliasCobroServicio.buscarActivoPropio(aliasCobroId, clienteId);
+            rifa.setAliasCobro(aliasCobro);
+            rifa.setAliasTransferencia(aliasCobro.getAlias());
+            return;
+        }
+
+        String aliasNormalizado = normalizarTextoOpcional(aliasTransferencia);
+        if (aliasNormalizado == null) {
+            throw new IllegalArgumentException("Tenes que seleccionar un alias de cobro o ingresar un alias de transferencia");
+        }
+        rifa.setAliasCobro(null);
+        rifa.setAliasTransferencia(aliasNormalizado);
     }
 
     private GanadorResponse aGanadorResponse(Ganador ganador) {

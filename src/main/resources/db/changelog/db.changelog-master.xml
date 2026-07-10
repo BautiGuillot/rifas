@@ -320,4 +320,62 @@
             <column name="twilio_mensaje_sid"/>
         </createIndex>
     </changeSet>
+
+    <changeSet id="012-add-alias-cobro" author="codex">
+        <createTable tableName="alias_cobro">
+            <column name="id" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="cliente_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="nombre" type="VARCHAR(120)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="alias" type="VARCHAR(64)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="entidad" type="VARCHAR(120)"/>
+            <column name="titular" type="VARCHAR(120)"/>
+            <column name="cbu_cvu" type="VARCHAR(32)"/>
+            <column name="activo" type="BOOLEAN" defaultValueBoolean="true">
+                <constraints nullable="false"/>
+            </column>
+            <column name="fecha_creacion" type="TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+
+        <addColumn tableName="rifa">
+            <column name="alias_cobro_id" type="BIGINT"/>
+        </addColumn>
+
+        <addForeignKeyConstraint baseTableName="alias_cobro" baseColumnNames="cliente_id" referencedTableName="cliente" referencedColumnNames="id" constraintName="fk_alias_cobro_cliente"/>
+        <addForeignKeyConstraint baseTableName="rifa" baseColumnNames="alias_cobro_id" referencedTableName="alias_cobro" referencedColumnNames="id" constraintName="fk_rifa_alias_cobro"/>
+        <addUniqueConstraint tableName="alias_cobro" columnNames="cliente_id, alias" constraintName="uk_alias_cobro_cliente_alias"/>
+        <createIndex tableName="alias_cobro" indexName="idx_alias_cobro_cliente">
+            <column name="cliente_id"/>
+        </createIndex>
+        <createIndex tableName="rifa" indexName="idx_rifa_alias_cobro">
+            <column name="alias_cobro_id"/>
+        </createIndex>
+
+        <sql>
+            insert into alias_cobro (cliente_id, nombre, alias, activo, fecha_creacion)
+            select r.cliente_id, r.alias_transferencia, r.alias_transferencia, true, current_timestamp
+            from rifa r
+            where r.cliente_id is not null and r.alias_transferencia is not null
+            group by r.cliente_id, r.alias_transferencia
+        </sql>
+        <sql>
+            update rifa
+            set alias_cobro_id = (
+                select ac.id
+                from alias_cobro ac
+                where ac.cliente_id = rifa.cliente_id and lower(ac.alias) = lower(rifa.alias_transferencia)
+                limit 1
+            )
+            where cliente_id is not null and alias_transferencia is not null
+        </sql>
+    </changeSet>
 </databaseChangeLog>

@@ -20,7 +20,8 @@ public record EditarRifaRequest(
         @NotNull @Min(1) Integer cantidadFilas,
         @NotNull @Min(1) Integer cantidadGanadores,
         @NotNull @DecimalMin("0.01") BigDecimal valorNumero,
-        @NotBlank @Pattern(regexp = "^[A-Za-z0-9._-]{3,64}$") String aliasTransferencia,
+        Long aliasCobroId,
+        @Pattern(regexp = "^[A-Za-z0-9._-]{3,64}$") String aliasTransferencia,
         @NotBlank @Pattern(regexp = "^\\+?[1-9][0-9]{7,14}$") String whatsappComprobante,
         LocalDateTime fechaSorteo,
         @NotEmpty List<@Valid PremioRequest> premios
