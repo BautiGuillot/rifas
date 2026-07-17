@@ -52,6 +52,9 @@ public class Compra {
     @Column(nullable = false)
     private LocalDateTime fechaExpiracion;
 
+    @Column(length = 64, unique = true)
+    private String tokenSeguimiento;
+
     private LocalDateTime fechaResolucion;
 
     private String comprobanteArchivo;
@@ -126,6 +129,14 @@ public class Compra {
 
     public void setFechaExpiracion(LocalDateTime fechaExpiracion) {
         this.fechaExpiracion = fechaExpiracion;
+    }
+
+    public String getTokenSeguimiento() {
+        return tokenSeguimiento;
+    }
+
+    public void setTokenSeguimiento(String tokenSeguimiento) {
+        this.tokenSeguimiento = tokenSeguimiento;
     }
 
     public LocalDateTime getFechaResolucion() {

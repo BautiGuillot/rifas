@@ -1,6 +1,7 @@
 package com.pescadoresargentinos.rifas.api;
 
 import com.pescadoresargentinos.rifas.api.dto.CompraResponse;
+import com.pescadoresargentinos.rifas.api.dto.CompraSeguimientoResponse;
 import com.pescadoresargentinos.rifas.api.dto.CrearCompraRequest;
 import com.pescadoresargentinos.rifas.api.dto.RifaDetalleResponse;
 import com.pescadoresargentinos.rifas.api.dto.RifaResumenResponse;
@@ -13,6 +14,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.multipart.MultipartFile;
@@ -72,5 +74,10 @@ public class RifaPublicaController {
     @PostMapping("/compras/{id}/expirar")
     public CompraResponse expirarCompra(@PathVariable Long id) {
         return compraServicio.expirarSiVencida(id);
+    }
+
+    @GetMapping("/compras/{id}/seguimiento")
+    public CompraSeguimientoResponse seguimientoCompra(@PathVariable Long id, @RequestParam String token) {
+        return compraServicio.seguimientoPublico(id, token);
     }
 }

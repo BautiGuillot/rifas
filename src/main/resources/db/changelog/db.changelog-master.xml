@@ -378,4 +378,11 @@
             where cliente_id is not null and alias_transferencia is not null
         </sql>
     </changeSet>
+
+    <changeSet id="013-add-compra-token-seguimiento" author="codex">
+        <addColumn tableName="compra">
+            <column name="token_seguimiento" type="VARCHAR(64)"/>
+        </addColumn>
+        <addUniqueConstraint tableName="compra" columnNames="token_seguimiento" constraintName="uk_compra_token_seguimiento"/>
+    </changeSet>
 </databaseChangeLog>

@@ -1,6 +1,7 @@
 package com.pescadoresargentinos.rifas.servicio;
 
 import com.pescadoresargentinos.rifas.api.dto.CompraResponse;
+import com.pescadoresargentinos.rifas.api.dto.CompraSeguimientoResponse;
 import com.pescadoresargentinos.rifas.api.dto.CrearCompraRequest;
 import com.pescadoresargentinos.rifas.dominio.Compra;
 import com.pescadoresargentinos.rifas.dominio.Comprador;
@@ -24,6 +25,7 @@ import java.time.LocalDateTime;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -82,13 +84,14 @@ public class CompraServicio {
         Comprador comprador = new Comprador();
         comprador.setNombre(request.nombre());
         comprador.setDni(request.dni());
-        comprador.setTelefono(normalizarTelefono(request.telefono()));
+        comprador.setTelefono(normalizarTelefonoComprador(request.telefono()));
 
         Compra compra = new Compra();
         compra.setRifa(rifa);
         compra.setComprador(comprador);
         compra.setTotal(rifa.getValorNumero().multiply(java.math.BigDecimal.valueOf(numeros.size())));
         compra.setFechaExpiracion(LocalDateTime.now().plusMinutes(5));
+        compra.setTokenSeguimiento(UUID.randomUUID().toString());
         compra = compraRepositorio.save(compra);
 
         for (NumeroRifa numero : numeros) {
@@ -166,8 +169,18 @@ public class CompraServicio {
     public CompraResponse marcarComprobanteEnviadoPorWhatsapp(Long compraId) {
         Compra compra = buscarCompra(compraId);
         cancelarSiVencidaSinComprobante(compra);
+
+        // La pantalla publica puede quedar unos segundos desactualizada mientras
+        // llega el comprobante por el webhook o el admin aprueba la compra.
+        // Informar el comprobante debe ser seguro de repetir en esos casos.
+        if (compra.getEstado() == EstadoCompra.APROBADA) {
+            return aResponse(compra);
+        }
         if (compra.getEstado() != EstadoCompra.PENDIENTE_PAGO) {
             throw new IllegalStateException("Solo se puede informar comprobante en compras pendientes");
+        }
+        if (compra.getComprobanteArchivo() != null || Boolean.TRUE.equals(compra.getComprobanteWhatsapp())) {
+            return aResponse(compra);
         }
         compra.setComprobanteWhatsapp(true);
         return aResponse(compra);
@@ -192,8 +205,8 @@ public class CompraServicio {
     @Transactional
     public Optional<Compra> buscarCompraPendientePorWhatsapp(String twilioFrom, String compradorTelefono) {
         return compraRepositorio.findFirstByRifaClienteTwilioWhatsappFromAndCompradorTelefonoAndEstadoOrderByFechaCreacionDesc(
-                normalizarTelefono(twilioFrom),
-                normalizarTelefono(compradorTelefono),
+                normalizarTelefonoWhatsapp(twilioFrom),
+                normalizarTelefonoWhatsapp(compradorTelefono),
                 EstadoCompra.PENDIENTE_PAGO
         );
     }
@@ -209,6 +222,19 @@ public class CompraServicio {
         Compra compra = buscarCompra(compraId);
         cancelarSiVencidaSinComprobante(compra);
         return aResponse(compra);
+    }
+
+    @Transactional
+    public CompraSeguimientoResponse seguimientoPublico(Long compraId, String tokenSeguimiento) {
+        Compra compra = buscarCompra(compraId);
+        if (tokenSeguimiento == null || !tokenSeguimiento.equals(compra.getTokenSeguimiento())) {
+            throw new SecurityException("No tenes permiso para consultar esta compra");
+        }
+        cancelarSiVencidaSinComprobante(compra);
+        return new CompraSeguimientoResponse(
+                compra.getEstado(),
+                compra.getComprobanteArchivo() != null || Boolean.TRUE.equals(compra.getComprobanteWhatsapp())
+        );
     }
 
     @Transactional(readOnly = true)
@@ -327,6 +353,7 @@ public class CompraServicio {
                 compra.getEstado(),
                 compra.getFechaCreacion(),
                 compra.getFechaExpiracion(),
+                compra.getTokenSeguimiento(),
                 compra.getComprobanteArchivo(),
                 compra.getComprobanteWhatsapp(),
                 compra.getTwilioMensajeSid(),
@@ -350,8 +377,12 @@ public class CompraServicio {
         return numero.getEtiqueta() + " (" + String.join("-", numero.getNumerosIncluidos()) + ")";
     }
 
-    private String normalizarTelefono(String telefono) {
+    private String normalizarTelefonoComprador(String telefono) {
         return TelefonoArgentina.normalizarObligatorio(telefono);
+    }
+
+    private String normalizarTelefonoWhatsapp(String telefono) {
+        return telefono == null ? "" : telefono.replace("whatsapp:", "").replace("+", "").replaceAll("\\D", "");
     }
 
     private void registrarEnvioWhatsappAutomatico(Compra compra) {

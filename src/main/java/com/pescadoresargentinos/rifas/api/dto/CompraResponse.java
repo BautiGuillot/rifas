@@ -17,6 +17,7 @@ public record CompraResponse(
         EstadoCompra estado,
         LocalDateTime fechaCreacion,
         LocalDateTime fechaExpiracion,
+        String tokenSeguimiento,
         String comprobanteArchivo,
         Boolean comprobanteWhatsapp,
         String twilioMensajeSid,
