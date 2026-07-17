@@ -22,7 +22,7 @@ public record CrearRifaRequest(
         @NotNull @DecimalMin("0.01") BigDecimal valorNumero,
         Long aliasCobroId,
         @Pattern(regexp = "^[A-Za-z0-9._-]{3,64}$") String aliasTransferencia,
-        @NotBlank @Pattern(regexp = "^\\+?[1-9][0-9]{7,14}$") String whatsappComprobante,
+        @NotBlank String whatsappComprobante,
         LocalDateTime fechaSorteo,
         @NotEmpty List<@Valid PremioRequest> premios
 ) {

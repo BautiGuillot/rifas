@@ -27,6 +27,7 @@ import com.pescadoresargentinos.rifas.repositorio.NumeroRifaRepositorio;
 import com.pescadoresargentinos.rifas.repositorio.PremioRepositorio;
 import com.pescadoresargentinos.rifas.repositorio.RifaRepositorio;
 import com.pescadoresargentinos.rifas.seguridad.UsuarioActual;
+import com.pescadoresargentinos.rifas.util.TelefonoArgentina;
 import java.util.Comparator;
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -545,6 +546,6 @@ public class RifaServicio {
     }
 
     private String normalizarTelefono(String telefono) {
-        return telefono.replace("+", "");
+        return TelefonoArgentina.normalizarObligatorio(telefono);
     }
 }

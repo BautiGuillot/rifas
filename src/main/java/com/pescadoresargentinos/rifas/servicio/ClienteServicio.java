@@ -14,6 +14,7 @@ import com.pescadoresargentinos.rifas.repositorio.UsuarioRepositorio;
 import com.pescadoresargentinos.rifas.seguridad.UsuarioActual;
 import com.pescadoresargentinos.rifas.servicio.storage.MediaGuardado;
 import com.pescadoresargentinos.rifas.servicio.storage.MediaStorage;
+import com.pescadoresargentinos.rifas.util.TelefonoArgentina;
 import java.util.List;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -199,7 +200,7 @@ public class ClienteServicio {
         cliente.setTwilioWhatsappFrom(normalizarTelefonoWhatsapp(from));
         cliente.setTwilioMessagingServiceSid(normalizarTextoOpcional(messagingServiceSid));
         cliente.setTwilioContentSid(normalizarTextoOpcional(contentSid));
-        cliente.setWhatsappConsultas(normalizarTelefonoWhatsapp(consultas));
+        cliente.setWhatsappConsultas(TelefonoArgentina.normalizarOpcional(consultas));
     }
 
     private String normalizarColor(String colorPrincipal) {

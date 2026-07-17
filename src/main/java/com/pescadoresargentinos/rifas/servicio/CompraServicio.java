@@ -18,6 +18,7 @@ import com.pescadoresargentinos.rifas.servicio.storage.ComprobanteGuardado;
 import com.pescadoresargentinos.rifas.servicio.storage.ComprobanteStorage;
 import com.pescadoresargentinos.rifas.servicio.twilio.TwilioEnvioResultado;
 import com.pescadoresargentinos.rifas.servicio.twilio.TwilioWhatsappServicio;
+import com.pescadoresargentinos.rifas.util.TelefonoArgentina;
 import java.net.URI;
 import java.time.LocalDateTime;
 import java.util.Comparator;
@@ -350,7 +351,7 @@ public class CompraServicio {
     }
 
     private String normalizarTelefono(String telefono) {
-        return telefono == null ? "" : telefono.replace("whatsapp:", "").replace("+", "").replaceAll("\\D", "");
+        return TelefonoArgentina.normalizarObligatorio(telefono);
     }
 
     private void registrarEnvioWhatsappAutomatico(Compra compra) {
