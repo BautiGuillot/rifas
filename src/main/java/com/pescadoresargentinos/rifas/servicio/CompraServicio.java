@@ -83,7 +83,6 @@ public class CompraServicio {
 
         Comprador comprador = new Comprador();
         comprador.setNombre(request.nombre());
-        comprador.setDni(request.dni());
         comprador.setTelefono(normalizarTelefonoComprador(request.telefono()));
 
         Compra compra = new Compra();
@@ -266,11 +265,9 @@ public class CompraServicio {
     }
 
     private void validarRango(Rifa rifa, List<Integer> valores) {
+        int minimo = rifa.getNumeroInicial();
+        int maximo = minimo + rifa.getCantidadFilas() - 1;
         valores.forEach(valor -> {
-            Integer minimo = rifa.getCantidadNumeros().equals(rifa.getCantidadFilas()) ? 0 : 1;
-            Integer maximo = rifa.getCantidadNumeros().equals(rifa.getCantidadFilas())
-                    ? rifa.getCantidadFilas() - 1
-                    : rifa.getCantidadFilas();
             if (valor < minimo || valor > maximo) {
                 throw new IllegalArgumentException("El numero " + valor + " esta fuera del rango de la rifa");
             }
@@ -346,7 +343,6 @@ public class CompraServicio {
                 compra.getRifa().getId(),
                 compra.getRifa().getTitulo(),
                 compra.getComprador().getNombre(),
-                compra.getComprador().getDni(),
                 compra.getComprador().getTelefono(),
                 numeros,
                 compra.getTotal(),

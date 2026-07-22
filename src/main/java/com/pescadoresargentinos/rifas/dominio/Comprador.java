@@ -17,9 +17,6 @@ public class Comprador {
     private String nombre;
 
     @Column(nullable = false)
-    private String dni;
-
-    @Column(nullable = false)
     private String telefono;
 
     public Long getId() {
@@ -32,14 +29,6 @@ public class Comprador {
 
     public void setNombre(String nombre) {
         this.nombre = nombre;
-    }
-
-    public String getDni() {
-        return dni;
-    }
-
-    public void setDni(String dni) {
-        this.dni = dni;
     }
 
     public String getTelefono() {

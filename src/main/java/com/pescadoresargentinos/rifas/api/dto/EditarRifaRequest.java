@@ -3,6 +3,7 @@ package com.pescadoresargentinos.rifas.api.dto;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
@@ -17,7 +18,8 @@ public record EditarRifaRequest(
         String descripcion,
         String aclaracionSorteo,
         @NotNull @Min(1) Integer cantidadNumeros,
-        @NotNull @Min(1) Integer cantidadFilas,
+        @NotNull @Min(1) Integer numerosPorFila,
+        @NotNull @Min(0) @Max(1) Integer numeroInicial,
         @NotNull @Min(1) Integer cantidadGanadores,
         @NotNull @DecimalMin("0.01") BigDecimal valorNumero,
         Long aliasCobroId,

@@ -1,6 +1,8 @@
 package com.pescadoresargentinos.rifas;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.hamcrest.Matchers.hasSize;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -13,6 +15,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.web.servlet.MockMvc;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
@@ -27,6 +30,75 @@ class RifaFlujoIntegrationTest {
     @Autowired
     private MockMvc mockMvc;
 
+    @Autowired
+    private JdbcTemplate jdbcTemplate;
+
+    @Test
+    void superAdminEliminaClienteConTodosSusDatos() throws Exception {
+        String suffix = UUID.randomUUID().toString().substring(0, 8);
+        String username = "borrar-" + suffix;
+        String superToken = login();
+        String clienteResponse = mockMvc.perform(post("/api/super-admin/clientes")
+                        .header("Authorization", "Bearer " + superToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "nombre": "Cliente a borrar",
+                                  "slug": "cliente-borrar-%s",
+                                  "username": "%s",
+                                  "password": "admin123"
+                                }
+                                """.formatted(suffix, username)))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        Integer clienteId = com.jayway.jsonpath.JsonPath.read(clienteResponse, "$.id");
+        String clienteToken = login(username, "admin123");
+
+        String rifaResponse = mockMvc.perform(post("/api/admin/rifas")
+                        .header("Authorization", "Bearer " + clienteToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "titulo": "Rifa a borrar",
+                                  "slug": "rifa-borrar-%s",
+                                  "cantidadNumeros": 10,
+                                  "numerosPorFila": 1,
+                                  "numeroInicial": 0,
+                                  "cantidadGanadores": 1,
+                                  "valorNumero": 1000,
+                                  "aliasTransferencia": "borrar.alias",
+                                  "whatsappComprobante": "5491112345678",
+                                  "premios": [{"posicion": 1, "descripcion": "Premio"}]
+                                }
+                                """.formatted(suffix)))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        Integer rifaId = com.jayway.jsonpath.JsonPath.read(rifaResponse, "$.id");
+
+        mockMvc.perform(patch("/api/admin/rifas/{id}/publicar", rifaId)
+                        .header("Authorization", "Bearer " + clienteToken))
+                .andExpect(status().isOk());
+        mockMvc.perform(post("/api/rifas/{id}/compras", rifaId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"nombre": "Comprador a borrar", "telefono": "1133334444", "numeros": [0]}
+                                """))
+                .andExpect(status().isOk());
+
+        Long compradorId = jdbcTemplate.queryForObject(
+                "select comprador_id from compra where rifa_id = ?", Long.class, rifaId);
+        mockMvc.perform(delete("/api/super-admin/clientes/{id}", clienteId)
+                        .header("Authorization", "Bearer " + superToken))
+                .andExpect(status().isOk());
+
+        assertEquals(0, jdbcTemplate.queryForObject("select count(*) from cliente where id = ?", Integer.class, clienteId));
+        assertEquals(0, jdbcTemplate.queryForObject("select count(*) from usuario where cliente_id = ?", Integer.class, clienteId));
+        assertEquals(0, jdbcTemplate.queryForObject("select count(*) from refresh_token where username = ?", Integer.class, username));
+        assertEquals(0, jdbcTemplate.queryForObject("select count(*) from rifa where cliente_id = ?", Integer.class, clienteId));
+        assertEquals(0, jdbcTemplate.queryForObject("select count(*) from alias_cobro where cliente_id = ?", Integer.class, clienteId));
+        assertEquals(0, jdbcTemplate.queryForObject("select count(*) from comprador where id = ?", Integer.class, compradorId));
+    }
+
     @Test
     void completaFlujoPrincipalDeRifa() throws Exception {
         String token = crearClienteYLogin("flujo");
@@ -36,7 +108,8 @@ class RifaFlujoIntegrationTest {
                   "slug": "rifa-flujo-%s",
                   "descripcion": "Premios de prueba",
                   "cantidadNumeros": 100,
-                  "cantidadFilas": 100,
+                  "numerosPorFila": 1,
+                  "numeroInicial": 0,
                   "cantidadGanadores": 2,
                   "valorNumero": 1500,
                   "aliasTransferencia": "pescadores.alias",
@@ -70,7 +143,8 @@ class RifaFlujoIntegrationTest {
                   "slug": "rifa-flujo-editada-%s",
                   "descripcion": "Premios de prueba editados",
                   "cantidadNumeros": 100,
-                  "cantidadFilas": 100,
+                  "numerosPorFila": 1,
+                  "numeroInicial": 0,
                   "cantidadGanadores": 2,
                   "valorNumero": 1500,
                   "aliasTransferencia": "pescadores.alias",
@@ -110,7 +184,6 @@ class RifaFlujoIntegrationTest {
         String compraJson = """
                 {
                   "nombre": "Juan Perez",
-                  "dni": "30111222",
                   "telefono": "1133334444",
                   "numeros": [0, 1]
                 }
@@ -172,6 +245,18 @@ class RifaFlujoIntegrationTest {
     }
 
     @Test
+    void generaFilasDesdeCeroOUnoSegunLaConfiguracion() throws Exception {
+        String token = crearClienteYLogin("numeracion");
+
+        verificarNumeracion(token, 100, 1, 0, 100,
+                new String[]{"00"}, new String[]{"99"});
+        verificarNumeracion(token, 100, 2, 0, 50,
+                new String[]{"00", "50"}, new String[]{"49", "99"});
+        verificarNumeracion(token, 99, 3, 1, 33,
+                new String[]{"01", "34", "67"}, new String[]{"33", "66", "99"});
+    }
+
+    @Test
     void cancelaRifaPublicada() throws Exception {
         String token = crearClienteYLogin("cancelar");
         String rifaJson = """
@@ -180,7 +265,8 @@ class RifaFlujoIntegrationTest {
                   "slug": "rifa-cancelar-%s",
                   "descripcion": "Prueba",
                   "cantidadNumeros": 10,
-                  "cantidadFilas": 10,
+                  "numerosPorFila": 1,
+                  "numeroInicial": 0,
                   "cantidadGanadores": 1,
                   "valorNumero": 1000,
                   "aliasTransferencia": "cancelar.alias",
@@ -224,7 +310,8 @@ class RifaFlujoIntegrationTest {
                   "slug": "%s",
                   "descripcion": "Prueba",
                   "cantidadNumeros": 10,
-                  "cantidadFilas": 10,
+                  "numerosPorFila": 1,
+                  "numeroInicial": 0,
                   "cantidadGanadores": 1,
                   "valorNumero": 1000,
                   "aliasTransferencia": "concurrente.alias",
@@ -262,7 +349,6 @@ class RifaFlujoIntegrationTest {
                 String compraJson = """
                         {
                           "nombre": "Cliente",
-                          "dni": "30000000",
                           "telefono": "1133334444",
                           "numeros": [0]
                         }
@@ -336,6 +422,67 @@ class RifaFlujoIntegrationTest {
 
     private String login() throws Exception {
         return login("superadmin", "admin123");
+    }
+
+    private void verificarNumeracion(
+            String token,
+            int cantidadNumeros,
+            int numerosPorFila,
+            int numeroInicial,
+            int cantidadFilas,
+            String[] primeraFila,
+            String[] ultimaFila
+    ) throws Exception {
+        String suffix = UUID.randomUUID().toString().substring(0, 8);
+        String request = """
+                {
+                  "titulo": "Prueba numeracion",
+                  "slug": "numeracion-%s",
+                  "descripcion": "Prueba",
+                  "cantidadNumeros": %d,
+                  "numerosPorFila": %d,
+                  "numeroInicial": %d,
+                  "cantidadGanadores": 1,
+                  "valorNumero": 1000,
+                  "aliasTransferencia": "prueba.alias",
+                  "whatsappComprobante": "5491112345678",
+                  "premios": [{"posicion": 1, "descripcion": "Premio"}]
+                }
+                """.formatted(suffix, cantidadNumeros, numerosPorFila, numeroInicial);
+
+        String response = mockMvc.perform(post("/api/admin/rifas")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(request))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.cantidadFilas").value(cantidadFilas))
+                .andExpect(jsonPath("$.numeros", hasSize(cantidadFilas)))
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+
+        assertEquals(java.util.List.of(primeraFila),
+                com.jayway.jsonpath.JsonPath.<java.util.List<String>>read(response, "$.numeros[0].numerosIncluidos"));
+        assertEquals(java.util.List.of(ultimaFila),
+                com.jayway.jsonpath.JsonPath.<java.util.List<String>>read(response, "$.numeros[" + (cantidadFilas - 1) + "].numerosIncluidos"));
+
+        Integer rifaId = com.jayway.jsonpath.JsonPath.read(response, "$.id");
+        String slug = com.jayway.jsonpath.JsonPath.read(response, "$.slug");
+        mockMvc.perform(patch("/api/admin/rifas/{id}/publicar", rifaId)
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk());
+
+        String compra = """
+                {
+                  "nombre": "Comprador inicial",
+                  "telefono": "1133334444",
+                  "numeros": [%d]
+                }
+                """.formatted(numeroInicial);
+        mockMvc.perform(post("/api/rifas/slug/{slug}/compras", slug)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(compra))
+                .andExpect(status().isOk());
     }
 
     private String crearClienteYLogin(String prefijo) throws Exception {

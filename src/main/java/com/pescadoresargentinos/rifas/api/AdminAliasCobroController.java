@@ -5,7 +5,9 @@ import com.pescadoresargentinos.rifas.api.dto.AliasCobroDetalleResponse;
 import com.pescadoresargentinos.rifas.api.dto.AliasCobroResponse;
 import com.pescadoresargentinos.rifas.servicio.AliasCobroServicio;
 import jakarta.validation.Valid;
+import java.time.LocalDate;
 import java.util.List;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -27,13 +29,23 @@ public class AdminAliasCobroController {
     }
 
     @GetMapping
-    public List<AliasCobroResponse> listar(@RequestParam(defaultValue = "false") boolean soloActivos) {
-        return soloActivos ? aliasCobroServicio.listarActivos() : aliasCobroServicio.listar();
+    public List<AliasCobroResponse> listar(
+            @RequestParam(defaultValue = "false") boolean soloActivos,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate desde,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate hasta
+    ) {
+        return soloActivos
+                ? aliasCobroServicio.listarActivos(desde, hasta)
+                : aliasCobroServicio.listar(desde, hasta);
     }
 
     @GetMapping("/{id}")
-    public AliasCobroDetalleResponse detalle(@PathVariable Long id) {
-        return aliasCobroServicio.detalle(id);
+    public AliasCobroDetalleResponse detalle(
+            @PathVariable Long id,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate desde,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate hasta
+    ) {
+        return aliasCobroServicio.detalle(id, desde, hasta);
     }
 
     @PostMapping

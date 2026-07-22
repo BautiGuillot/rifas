@@ -10,7 +10,6 @@ public record CompraResponse(
         Long rifaId,
         String rifaTitulo,
         String nombre,
-        String dni,
         String telefono,
         List<String> numeros,
         BigDecimal total,

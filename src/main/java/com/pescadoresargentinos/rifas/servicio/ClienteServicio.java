@@ -16,6 +16,7 @@ import com.pescadoresargentinos.rifas.servicio.storage.MediaGuardado;
 import com.pescadoresargentinos.rifas.servicio.storage.MediaStorage;
 import com.pescadoresargentinos.rifas.util.TelefonoArgentina;
 import java.util.List;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -28,19 +29,22 @@ public class ClienteServicio {
     private final PasswordEncoder passwordEncoder;
     private final UsuarioActual usuarioActual;
     private final MediaStorage mediaStorage;
+    private final JdbcTemplate jdbcTemplate;
 
     public ClienteServicio(
             ClienteRepositorio clienteRepositorio,
             UsuarioRepositorio usuarioRepositorio,
             PasswordEncoder passwordEncoder,
             UsuarioActual usuarioActual,
-            MediaStorage mediaStorage
+            MediaStorage mediaStorage,
+            JdbcTemplate jdbcTemplate
     ) {
         this.clienteRepositorio = clienteRepositorio;
         this.usuarioRepositorio = usuarioRepositorio;
         this.passwordEncoder = passwordEncoder;
         this.usuarioActual = usuarioActual;
         this.mediaStorage = mediaStorage;
+        this.jdbcTemplate = jdbcTemplate;
     }
 
     @Transactional
@@ -119,6 +123,57 @@ public class ClienteServicio {
         cliente.setEstado(request.estado());
         Usuario usuario = usuarioRepositorio.findByClienteId(cliente.getId()).orElse(null);
         return aResponse(cliente, usuario);
+    }
+
+    @Transactional
+    public void eliminar(Long id) {
+        Cliente cliente = buscarCliente(id);
+        Usuario usuario = usuarioRepositorio.findByClienteId(id).orElse(null);
+        String username = usuario == null ? null : usuario.getUsername();
+
+        List<Long> compradoresIds = jdbcTemplate.queryForList("""
+                select distinct c.comprador_id
+                from compra c
+                join rifa r on r.id = c.rifa_id
+                where r.cliente_id = ?
+                """, Long.class, id);
+
+        jdbcTemplate.update("delete from ganador where rifa_id in (select id from rifa where cliente_id = ?)", id);
+        jdbcTemplate.update("""
+                delete from numero_rifa_numeros_incluidos
+                where numero_rifa_id in (
+                    select nr.id from numero_rifa nr
+                    join rifa r on r.id = nr.rifa_id
+                    where r.cliente_id = ?
+                )
+                """, id);
+        jdbcTemplate.update("""
+                delete from compra_etiquetas_numeros
+                where compra_id in (
+                    select c.id from compra c
+                    join rifa r on r.id = c.rifa_id
+                    where r.cliente_id = ?
+                )
+                """, id);
+        jdbcTemplate.update("""
+                update numero_rifa set compra_id = null
+                where rifa_id in (select id from rifa where cliente_id = ?)
+                """, id);
+        jdbcTemplate.update("delete from compra where rifa_id in (select id from rifa where cliente_id = ?)", id);
+        compradoresIds.forEach(compradorId -> jdbcTemplate.update(
+                "delete from comprador where id = ? and not exists (select 1 from compra where comprador_id = ?)",
+                compradorId,
+                compradorId
+        ));
+        jdbcTemplate.update("delete from numero_rifa where rifa_id in (select id from rifa where cliente_id = ?)", id);
+        jdbcTemplate.update("delete from premio where rifa_id in (select id from rifa where cliente_id = ?)", id);
+        jdbcTemplate.update("delete from rifa where cliente_id = ?", id);
+        jdbcTemplate.update("delete from alias_cobro where cliente_id = ?", id);
+        if (username != null) {
+            jdbcTemplate.update("delete from refresh_token where username = ?", username);
+        }
+        jdbcTemplate.update("delete from usuario where cliente_id = ?", id);
+        jdbcTemplate.update("delete from cliente where id = ?", cliente.getId());
     }
 
     @Transactional(readOnly = true)

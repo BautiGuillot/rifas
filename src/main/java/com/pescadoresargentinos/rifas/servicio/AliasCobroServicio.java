@@ -8,6 +8,7 @@ import com.pescadoresargentinos.rifas.dominio.AliasCobro;
 import com.pescadoresargentinos.rifas.dominio.Cliente;
 import com.pescadoresargentinos.rifas.dominio.EstadoCliente;
 import com.pescadoresargentinos.rifas.dominio.EstadoCompra;
+import com.pescadoresargentinos.rifas.dominio.EstadoRifa;
 import com.pescadoresargentinos.rifas.dominio.Rifa;
 import com.pescadoresargentinos.rifas.repositorio.AliasCobroRepositorio;
 import com.pescadoresargentinos.rifas.repositorio.ClienteRepositorio;
@@ -15,6 +16,8 @@ import com.pescadoresargentinos.rifas.repositorio.CompraRepositorio;
 import com.pescadoresargentinos.rifas.repositorio.RifaRepositorio;
 import com.pescadoresargentinos.rifas.seguridad.UsuarioActual;
 import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -46,32 +49,46 @@ public class AliasCobroServicio {
     }
 
     @Transactional(readOnly = true)
-    public List<AliasCobroResponse> listar() {
+    public List<AliasCobroResponse> listar(LocalDate desde, LocalDate hasta) {
         Long clienteId = clienteActualActivo().getId();
-        Map<Long, TotalesAlias> totales = totalesPorAlias(clienteId);
+        RangoFechas rango = RangoFechas.crear(desde, hasta);
+        Map<Long, TotalesAlias> totales = totalesPorAlias(clienteId, rango);
         return aliasCobroRepositorio.findByClienteIdOrderByActivoDescNombreAsc(clienteId).stream()
-                .map(alias -> aResponse(alias, totales.get(alias.getId())))
+                .map(alias -> aResponse(alias, totales.get(alias.getId()), rango))
+                .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public List<AliasCobroResponse> listarActivos(LocalDate desde, LocalDate hasta) {
+        Long clienteId = clienteActualActivo().getId();
+        RangoFechas rango = RangoFechas.crear(desde, hasta);
+        Map<Long, TotalesAlias> totales = totalesPorAlias(clienteId, rango);
+        return aliasCobroRepositorio.findByClienteIdAndActivoTrueOrderByNombreAsc(clienteId).stream()
+                .map(alias -> aResponse(alias, totales.get(alias.getId()), rango))
                 .toList();
     }
 
     @Transactional(readOnly = true)
     public List<AliasCobroResponse> listarActivos() {
-        Long clienteId = clienteActualActivo().getId();
-        Map<Long, TotalesAlias> totales = totalesPorAlias(clienteId);
-        return aliasCobroRepositorio.findByClienteIdAndActivoTrueOrderByNombreAsc(clienteId).stream()
-                .map(alias -> aResponse(alias, totales.get(alias.getId())))
-                .toList();
+        return listarActivos(null, null);
     }
 
     @Transactional(readOnly = true)
-    public AliasCobroDetalleResponse detalle(Long id) {
+    public AliasCobroDetalleResponse detalle(Long id, LocalDate desde, LocalDate hasta) {
         Long clienteId = clienteActualActivo().getId();
+        RangoFechas rango = RangoFechas.crear(desde, hasta);
         AliasCobro aliasCobro = buscarPropio(id, clienteId);
         List<Rifa> rifas = rifaRepositorio.findAsignadasAAlias(clienteId, aliasCobro.getId(), aliasCobro.getAlias());
-        Map<Long, TotalesRifa> totales = totalesPorRifa(rifas);
+        List<Rifa> rifasVisibles = rango.activo()
+                ? rifas.stream()
+                        .filter(rifa -> rifa.getEstado() == EstadoRifa.FINALIZADA)
+                        .filter(rifa -> rango.incluye(rifa.getFechaFinalizacion()))
+                        .toList()
+                : rifas;
+        Map<Long, TotalesRifa> totales = totalesPorRifa(rifasVisibles, rango);
         return new AliasCobroDetalleResponse(
-                aResponse(aliasCobro, totalesPorAlias(clienteId).get(aliasCobro.getId())),
-                rifas.stream()
+                aResponse(aliasCobro, totalesPorAlias(clienteId, rango).get(aliasCobro.getId()), rango),
+                rifasVisibles.stream()
                         .map(rifa -> aRifaResponse(rifa, totales.get(rifa.getId())))
                         .toList()
         );
@@ -86,7 +103,7 @@ public class AliasCobroServicio {
         AliasCobro aliasCobro = new AliasCobro();
         aliasCobro.setCliente(cliente);
         aplicar(aliasCobro, request, aliasNormalizado);
-        return aResponse(aliasCobroRepositorio.save(aliasCobro), null);
+        return aResponse(aliasCobroRepositorio.save(aliasCobro), null, RangoFechas.sinFiltro());
     }
 
     @Transactional
@@ -96,7 +113,8 @@ public class AliasCobroServicio {
         String aliasNormalizado = normalizarAlias(request.alias());
         validarAliasDisponible(clienteId, aliasNormalizado, id);
         aplicar(aliasCobro, request, aliasNormalizado);
-        return aResponse(aliasCobro, totalesPorAlias(clienteId).get(id));
+        RangoFechas rango = RangoFechas.sinFiltro();
+        return aResponse(aliasCobro, totalesPorAlias(clienteId, rango).get(id), rango);
     }
 
     @Transactional
@@ -104,7 +122,8 @@ public class AliasCobroServicio {
         Long clienteId = clienteActualActivo().getId();
         AliasCobro aliasCobro = buscarPropio(id, clienteId);
         aliasCobro.setActivo(activo);
-        return aResponse(aliasCobro, totalesPorAlias(clienteId).get(id));
+        RangoFechas rango = RangoFechas.sinFiltro();
+        return aResponse(aliasCobro, totalesPorAlias(clienteId, rango).get(id), rango);
     }
 
     public AliasCobro buscarActivoPropio(Long id, Long clienteId) {
@@ -163,9 +182,13 @@ public class AliasCobroServicio {
         return cliente;
     }
 
-    private Map<Long, TotalesAlias> totalesPorAlias(Long clienteId) {
+    private Map<Long, TotalesAlias> totalesPorAlias(Long clienteId, RangoFechas rango) {
         Map<Long, TotalesAlias> totales = new HashMap<>();
-        compraRepositorio.sumarAprobadasPorAliasCobro(clienteId, EstadoCompra.APROBADA)
+        List<Object[]> resumen = rango.activo()
+                ? compraRepositorio.sumarAprobadasPorAliasCobroEntre(
+                        clienteId, EstadoCompra.APROBADA, rango.desde(), rango.hastaExclusivo())
+                : compraRepositorio.sumarAprobadasPorAliasCobro(clienteId, EstadoCompra.APROBADA);
+        resumen
                 .forEach(row -> totales.put(
                         (Long) row[0],
                         new TotalesAlias((Long) row[1], (BigDecimal) row[2])
@@ -173,7 +196,7 @@ public class AliasCobroServicio {
         return totales;
     }
 
-    private AliasCobroResponse aResponse(AliasCobro aliasCobro, TotalesAlias totales) {
+    private AliasCobroResponse aResponse(AliasCobro aliasCobro, TotalesAlias totales, RangoFechas rango) {
         TotalesAlias datos = totales == null ? new TotalesAlias(0L, BigDecimal.ZERO) : totales;
         return new AliasCobroResponse(
                 aliasCobro.getId(),
@@ -189,18 +212,22 @@ public class AliasCobroServicio {
                         aliasCobro.getId(),
                         aliasCobro.getAlias()
                 ),
+                contarRifasFinalizadas(aliasCobro, rango),
                 datos.comprasAprobadas(),
                 datos.recaudacionAprobada()
         );
     }
 
-    private Map<Long, TotalesRifa> totalesPorRifa(List<Rifa> rifas) {
+    private Map<Long, TotalesRifa> totalesPorRifa(List<Rifa> rifas, RangoFechas rango) {
         Map<Long, TotalesRifa> totales = new HashMap<>();
         List<Long> rifaIds = rifas.stream().map(Rifa::getId).toList();
         if (rifaIds.isEmpty()) {
             return totales;
         }
-        compraRepositorio.resumirPorRifas(rifaIds).forEach(row -> {
+        List<Object[]> resumen = rango.activo()
+                ? compraRepositorio.resumirPorRifasEntre(rifaIds, rango.desde(), rango.hastaExclusivo())
+                : compraRepositorio.resumirPorRifas(rifaIds);
+        resumen.forEach(row -> {
             Long rifaId = (Long) row[0];
             EstadoCompra estado = (EstadoCompra) row[1];
             Long cantidad = (Long) row[2];
@@ -209,6 +236,25 @@ public class AliasCobroServicio {
             totales.put(rifaId, actual.con(estado, cantidad, total));
         });
         return totales;
+    }
+
+    private long contarRifasFinalizadas(AliasCobro aliasCobro, RangoFechas rango) {
+        Long clienteId = aliasCobro.getCliente().getId();
+        return rango.activo()
+                ? rifaRepositorio.countFinalizadasAAliasEntre(
+                        clienteId,
+                        aliasCobro.getId(),
+                        aliasCobro.getAlias(),
+                        EstadoRifa.FINALIZADA,
+                        rango.desde(),
+                        rango.hastaExclusivo()
+                )
+                : rifaRepositorio.countFinalizadasAAlias(
+                        clienteId,
+                        aliasCobro.getId(),
+                        aliasCobro.getAlias(),
+                        EstadoRifa.FINALIZADA
+                );
     }
 
     private AliasCobroRifaResponse aRifaResponse(Rifa rifa, TotalesRifa totales) {
@@ -221,6 +267,7 @@ public class AliasCobroServicio {
                 rifa.getValorNumero(),
                 rifa.getFechaCreacion(),
                 rifa.getFechaSorteo(),
+                rifa.getFechaFinalizacion(),
                 datos.comprasPendientes(),
                 datos.comprasAprobadas(),
                 datos.comprasCanceladas(),
@@ -237,6 +284,32 @@ public class AliasCobroServicio {
     }
 
     private record TotalesAlias(Long comprasAprobadas, BigDecimal recaudacionAprobada) {
+    }
+
+    private record RangoFechas(LocalDateTime desde, LocalDateTime hastaExclusivo, boolean activo) {
+        private static final LocalDateTime LIMITE_INFERIOR = LocalDate.of(1900, 1, 1).atStartOfDay();
+        private static final LocalDateTime LIMITE_SUPERIOR = LocalDate.of(3000, 1, 1).atStartOfDay();
+
+        private static RangoFechas crear(LocalDate desde, LocalDate hasta) {
+            if (desde != null && hasta != null && desde.isAfter(hasta)) {
+                throw new IllegalArgumentException("La fecha desde no puede ser posterior a la fecha hasta");
+            }
+            return new RangoFechas(
+                    desde == null ? LIMITE_INFERIOR : desde.atStartOfDay(),
+                    hasta == null ? LIMITE_SUPERIOR : hasta.plusDays(1).atStartOfDay(),
+                    desde != null || hasta != null
+            );
+        }
+
+        private static RangoFechas sinFiltro() {
+            return new RangoFechas(LIMITE_INFERIOR, LIMITE_SUPERIOR, false);
+        }
+
+        private boolean incluye(LocalDateTime fecha) {
+            return fecha != null
+                    && !fecha.isBefore(desde)
+                    && fecha.isBefore(hastaExclusivo);
+        }
     }
 
     private record TotalesRifa(

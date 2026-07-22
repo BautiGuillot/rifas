@@ -61,10 +61,41 @@ public interface CompraRepositorio extends JpaRepository<Compra, Long> {
     List<Object[]> sumarAprobadasPorAliasCobro(@Param("clienteId") Long clienteId, @Param("estado") EstadoCompra estado);
 
     @Query("""
+            select c.rifa.aliasCobro.id, count(c), coalesce(sum(c.total), 0)
+            from Compra c
+            where c.rifa.cliente.id = :clienteId
+              and c.estado = :estado
+              and c.rifa.aliasCobro is not null
+              and c.fechaResolucion >= :desde
+              and c.fechaResolucion < :hasta
+            group by c.rifa.aliasCobro.id
+            """)
+    List<Object[]> sumarAprobadasPorAliasCobroEntre(
+            @Param("clienteId") Long clienteId,
+            @Param("estado") EstadoCompra estado,
+            @Param("desde") LocalDateTime desde,
+            @Param("hasta") LocalDateTime hasta
+    );
+
+    @Query("""
             select c.rifa.id, c.estado, count(c), coalesce(sum(c.total), 0)
             from Compra c
             where c.rifa.id in :rifaIds
             group by c.rifa.id, c.estado
             """)
     List<Object[]> resumirPorRifas(@Param("rifaIds") List<Long> rifaIds);
+
+    @Query("""
+            select c.rifa.id, c.estado, count(c), coalesce(sum(c.total), 0)
+            from Compra c
+            where c.rifa.id in :rifaIds
+              and c.fechaResolucion >= :desde
+              and c.fechaResolucion < :hasta
+            group by c.rifa.id, c.estado
+            """)
+    List<Object[]> resumirPorRifasEntre(
+            @Param("rifaIds") List<Long> rifaIds,
+            @Param("desde") LocalDateTime desde,
+            @Param("hasta") LocalDateTime hasta
+    );
 }

@@ -133,14 +133,18 @@ public class TwilioWhatsappServicio {
     private String mensajeLibre(Compra compra, Cliente cliente) {
         String consultas = esVacio(cliente.getWhatsappConsultas())
                 ? ""
-                : " Si tenes alguna duda contactate aca: https://wa.me/" + cliente.getWhatsappConsultas();
+                : "\nSi tenes alguna duda contactate aca: https://wa.me/" + cliente.getWhatsappConsultas();
+        String filasONumeros = compra.getEtiquetasNumeros().isEmpty()
+                ? numerosCompra(compra)
+                : String.join(", ", compra.getEtiquetasNumeros());
         return "Hola " + compra.getComprador().getNombre()
-                + ", jugaste la reserva #" + compra.getId()
-                + " en " + compra.getRifa().getTitulo()
-                + ". Filas/numeros: " + (compra.getEtiquetasNumeros().isEmpty() ? numerosCompra(compra) : String.join(", ", compra.getEtiquetasNumeros()))
-                + ". Monto: " + dinero(compra.getTotal())
-                + ". Alias: " + compra.getRifa().getAliasTransferencia()
-                + ". Envia el comprobante por este mismo medio. Unicamente leemos comprobantes." + consultas;
+                + ", jugaste las Filas/numeros: " + filasONumeros
+                + " en " + compra.getRifa().getTitulo() + "."
+                + "\nMonto: " + dinero(compra.getTotal()) + "."
+                + "\nAlias: " + compra.getRifa().getAliasTransferencia() + "."
+                + "\nPodes enviar el comprobante por este mismo medio."
+                + "\nENVIAR UNICAMENTE EL DOCUMENTO O IMAGEN DEL COMPROBANTE."
+                + consultas;
     }
 
     private String numerosCompra(Compra compra) {

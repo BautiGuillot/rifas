@@ -13,6 +13,7 @@ public record AliasCobroResponse(
         Boolean activo,
         LocalDateTime fechaCreacion,
         Long rifasAsociadas,
+        Long rifasFinalizadas,
         Long comprasAprobadas,
         BigDecimal recaudacionAprobada
 ) {

@@ -385,4 +385,47 @@
         </addColumn>
         <addUniqueConstraint tableName="compra" columnNames="token_seguimiento" constraintName="uk_compra_token_seguimiento"/>
     </changeSet>
+
+    <changeSet id="014-make-comprador-dni-optional" author="codex">
+        <dropNotNullConstraint tableName="comprador" columnName="dni" columnDataType="VARCHAR(255)"/>
+    </changeSet>
+
+    <changeSet id="015-add-rifa-fecha-finalizacion" author="codex">
+        <addColumn tableName="rifa">
+            <column name="fecha_finalizacion" type="TIMESTAMP"/>
+        </addColumn>
+        <sql>
+            update rifa
+            set fecha_finalizacion = coalesce(
+                (select max(c.fecha_resolucion)
+                 from compra c
+                 where c.rifa_id = rifa.id and c.estado = 'APROBADA'),
+                fecha_sorteo,
+                fecha_creacion,
+                current_timestamp
+            )
+            where estado = 'FINALIZADA' and fecha_finalizacion is null
+        </sql>
+        <createIndex tableName="rifa" indexName="idx_rifa_estado_fecha_finalizacion">
+            <column name="estado"/>
+            <column name="fecha_finalizacion"/>
+        </createIndex>
+    </changeSet>
+
+    <changeSet id="016-add-rifa-numero-inicial" author="codex">
+        <addColumn tableName="rifa">
+            <column name="numero_inicial" type="INT" defaultValueNumeric="1"/>
+        </addColumn>
+        <sql>
+            update rifa
+            set numero_inicial = 0
+            where exists (
+                select 1
+                from numero_rifa nr
+                where nr.rifa_id = rifa.id
+                  and nr.valor = 0
+            )
+        </sql>
+        <addNotNullConstraint tableName="rifa" columnName="numero_inicial" columnDataType="INT"/>
+    </changeSet>
 </databaseChangeLog>

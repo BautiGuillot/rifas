@@ -6,7 +6,6 @@ import java.util.List;
 
 public record CrearCompraRequest(
         @NotBlank String nombre,
-        @NotBlank String dni,
         @NotBlank String telefono,
         @NotEmpty List<Integer> numeros
 ) {

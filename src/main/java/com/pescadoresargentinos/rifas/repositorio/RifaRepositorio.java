@@ -44,6 +44,44 @@ public interface RifaRepositorio extends JpaRepository<Rifa, Long> {
     );
 
     @Query("""
+            select count(r)
+            from Rifa r
+            where r.cliente.id = :clienteId
+              and r.estado = :estado
+              and (
+                r.aliasCobro.id = :aliasCobroId
+                or (r.aliasCobro is null and lower(r.aliasTransferencia) = lower(:alias))
+              )
+            """)
+    long countFinalizadasAAlias(
+            @Param("clienteId") Long clienteId,
+            @Param("aliasCobroId") Long aliasCobroId,
+            @Param("alias") String alias,
+            @Param("estado") EstadoRifa estado
+    );
+
+    @Query("""
+            select count(r)
+            from Rifa r
+            where r.cliente.id = :clienteId
+              and r.estado = :estado
+              and r.fechaFinalizacion >= :desde
+              and r.fechaFinalizacion < :hasta
+              and (
+                r.aliasCobro.id = :aliasCobroId
+                or (r.aliasCobro is null and lower(r.aliasTransferencia) = lower(:alias))
+              )
+            """)
+    long countFinalizadasAAliasEntre(
+            @Param("clienteId") Long clienteId,
+            @Param("aliasCobroId") Long aliasCobroId,
+            @Param("alias") String alias,
+            @Param("estado") EstadoRifa estado,
+            @Param("desde") java.time.LocalDateTime desde,
+            @Param("hasta") java.time.LocalDateTime hasta
+    );
+
+    @Query("""
             select r
             from Rifa r
             where r.cliente.id = :clienteId

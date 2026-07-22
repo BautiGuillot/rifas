@@ -17,6 +17,8 @@ public record RifaResumenResponse(
         String aclaracionSorteo,
         Integer cantidadNumeros,
         Integer cantidadFilas,
+        Integer numerosPorFila,
+        Integer numeroInicial,
         Integer cantidadGanadores,
         BigDecimal valorNumero,
         Long aliasCobroId,

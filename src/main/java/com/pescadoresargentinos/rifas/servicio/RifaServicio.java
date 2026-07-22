@@ -28,6 +28,7 @@ import com.pescadoresargentinos.rifas.repositorio.PremioRepositorio;
 import com.pescadoresargentinos.rifas.repositorio.RifaRepositorio;
 import com.pescadoresargentinos.rifas.seguridad.UsuarioActual;
 import com.pescadoresargentinos.rifas.util.TelefonoArgentina;
+import java.time.LocalDateTime;
 import java.util.Comparator;
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -83,7 +84,8 @@ public class RifaServicio {
         rifa.setDescripcion(request.descripcion());
         rifa.setAclaracionSorteo(normalizarTextoOpcional(request.aclaracionSorteo()));
         rifa.setCantidadNumeros(request.cantidadNumeros());
-        rifa.setCantidadFilas(request.cantidadFilas());
+        rifa.setCantidadFilas(calcularCantidadFilas(request.cantidadNumeros(), request.numerosPorFila()));
+        rifa.setNumeroInicial(request.numeroInicial());
         rifa.setCantidadGanadores(request.cantidadGanadores());
         rifa.setValorNumero(request.valorNumero());
         aplicarAliasCobro(rifa, cliente.getId(), request.aliasCobroId(), request.aliasTransferencia());
@@ -99,7 +101,7 @@ public class RifaServicio {
             rifa.getPremios().add(premio);
         });
 
-        generarNumeros(rifa, request.cantidadNumeros(), request.cantidadFilas());
+        generarNumeros(rifa, request.cantidadNumeros(), rifa.getCantidadFilas(), request.numeroInicial());
 
         return detalle(rifaRepositorio.save(rifa).getId());
     }
@@ -119,7 +121,7 @@ public class RifaServicio {
         if (compraRepositorio.existsByRifaId(id)) {
             throw new IllegalStateException("No se puede editar una rifa con compras asociadas");
         }
-        validarConfiguracionNumeros(request.cantidadNumeros(), request.cantidadFilas());
+        validarConfiguracionNumeros(request.cantidadNumeros(), request.numerosPorFila(), request.numeroInicial());
         validarPremios(request.cantidadGanadores(), request.premios());
 
         rifa.setTitulo(request.titulo());
@@ -127,7 +129,8 @@ public class RifaServicio {
         rifa.setDescripcion(request.descripcion());
         rifa.setAclaracionSorteo(normalizarTextoOpcional(request.aclaracionSorteo()));
         rifa.setCantidadNumeros(request.cantidadNumeros());
-        rifa.setCantidadFilas(request.cantidadFilas());
+        rifa.setCantidadFilas(calcularCantidadFilas(request.cantidadNumeros(), request.numerosPorFila()));
+        rifa.setNumeroInicial(request.numeroInicial());
         rifa.setCantidadGanadores(request.cantidadGanadores());
         rifa.setValorNumero(request.valorNumero());
         aplicarAliasCobro(rifa, rifa.getCliente().getId(), request.aliasCobroId(), request.aliasTransferencia());
@@ -147,7 +150,7 @@ public class RifaServicio {
             rifa.getPremios().add(premio);
         });
 
-        generarNumeros(rifa, request.cantidadNumeros(), request.cantidadFilas());
+        generarNumeros(rifa, request.cantidadNumeros(), rifa.getCantidadFilas(), request.numeroInicial());
 
         return detalle(id);
     }
@@ -225,6 +228,7 @@ public class RifaServicio {
         validarTodosLosNumerosVendidos(rifa);
         validarYGuardarGanadores(rifa, request);
         rifa.setEstado(EstadoRifa.FINALIZADA);
+        rifa.setFechaFinalizacion(LocalDateTime.now());
         return detalle(id);
     }
 
@@ -347,7 +351,7 @@ public class RifaServicio {
     }
 
     private void validarPremios(CrearRifaRequest request) {
-        validarConfiguracionNumeros(request.cantidadNumeros(), request.cantidadFilas());
+        validarConfiguracionNumeros(request.cantidadNumeros(), request.numerosPorFila(), request.numeroInicial());
         validarPremios(request.cantidadGanadores(), request.premios());
     }
 
@@ -359,33 +363,36 @@ public class RifaServicio {
                 .orElseThrow(() -> new IllegalArgumentException("No existe el numero " + numeroSorteado));
     }
 
-    private void validarConfiguracionNumeros(Integer cantidadNumeros, Integer cantidadFilas) {
-        if (cantidadFilas > cantidadNumeros) {
-            throw new IllegalArgumentException("La cantidad de filas no puede superar la cantidad de numeros");
+    private void validarConfiguracionNumeros(Integer cantidadNumeros, Integer numerosPorFila, Integer numeroInicial) {
+        if (numerosPorFila > cantidadNumeros) {
+            throw new IllegalArgumentException("Los numeros por fila no pueden superar la cantidad total de numeros");
         }
-        if (cantidadNumeros % cantidadFilas != 0) {
-            throw new IllegalArgumentException("La cantidad de numeros debe ser divisible por la cantidad de filas");
+        if (cantidadNumeros % numerosPorFila != 0) {
+            throw new IllegalArgumentException("La cantidad total de numeros debe ser divisible por los numeros por fila");
+        }
+        if (numeroInicial != 0 && numeroInicial != 1) {
+            throw new IllegalArgumentException("La numeracion debe comenzar en 0 o en 1");
         }
     }
 
-    private void generarNumeros(Rifa rifa, int cantidadNumeros, int cantidadFilas) {
-        int numerosPorFila = cantidadNumeros / cantidadFilas;
-        boolean numerosDirectosDeCero = cantidadNumeros == cantidadFilas;
-        int inicio = numerosDirectosDeCero ? 0 : 1;
-        int anchoNumero = Math.max(2, String.valueOf(numerosDirectosDeCero ? cantidadNumeros - 1 : cantidadNumeros).length());
-        int anchoFila = Math.max(2, String.valueOf(cantidadFilas).length());
+    private int calcularCantidadFilas(int cantidadNumeros, int numerosPorFila) {
+        return cantidadNumeros / numerosPorFila;
+    }
 
-        for (int fila = 1; fila <= cantidadFilas; fila++) {
+    private void generarNumeros(Rifa rifa, int cantidadNumeros, int cantidadFilas, int numeroInicial) {
+        int numerosPorFila = cantidadNumeros / cantidadFilas;
+        int ultimoNumero = numeroInicial + cantidadNumeros - 1;
+        int anchoNumero = Math.max(2, String.valueOf(ultimoNumero).length());
+
+        for (int fila = 0; fila < cantidadFilas; fila++) {
             NumeroRifa numero = new NumeroRifa();
             numero.setRifa(rifa);
-            numero.setValor(numerosDirectosDeCero ? fila - 1 : fila);
+            numero.setValor(numeroInicial + fila);
             for (int columna = 0; columna < numerosPorFila; columna++) {
-                int valorSorteo = inicio + fila - 1 + (columna * cantidadFilas);
+                int valorSorteo = numeroInicial + fila + (columna * cantidadFilas);
                 numero.getNumerosIncluidos().add(String.format("%0" + anchoNumero + "d", valorSorteo));
             }
-            numero.setEtiqueta(numerosDirectosDeCero
-                    ? numero.getNumerosIncluidos().getFirst()
-                    : String.format("%0" + anchoFila + "d", fila));
+            numero.setEtiqueta(numero.getNumerosIncluidos().getFirst());
             rifa.getNumeros().add(numero);
         }
     }
@@ -446,6 +453,8 @@ public class RifaServicio {
                 rifa.getAclaracionSorteo(),
                 rifa.getCantidadNumeros(),
                 rifa.getCantidadFilas(),
+                rifa.getCantidadNumeros() / rifa.getCantidadFilas(),
+                rifa.getNumeroInicial(),
                 rifa.getCantidadGanadores(),
                 rifa.getValorNumero(),
                 aliasCobro == null ? null : aliasCobro.getId(),
@@ -476,6 +485,8 @@ public class RifaServicio {
                 rifa.getAclaracionSorteo(),
                 rifa.getCantidadNumeros(),
                 rifa.getCantidadFilas(),
+                rifa.getCantidadNumeros() / rifa.getCantidadFilas(),
+                rifa.getNumeroInicial(),
                 rifa.getCantidadGanadores(),
                 rifa.getValorNumero(),
                 aliasCobro == null ? null : aliasCobro.getId(),

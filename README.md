@@ -150,6 +150,7 @@ Los numeros arrancan en `00` y se muestran con ceros a la izquierda. Para una ri
 - `GET /api/super-admin/clientes`
 - `POST /api/super-admin/clientes`
 - `PATCH /api/super-admin/clientes/{id}/estado`
+- `DELETE /api/super-admin/clientes/{id}` (elimina definitivamente el cliente y todos sus datos)
 
 ## Endpoints admin
 

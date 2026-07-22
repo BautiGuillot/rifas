@@ -51,6 +51,9 @@ public class Rifa {
     private Integer cantidadFilas;
 
     @Column(nullable = false)
+    private Integer numeroInicial = 1;
+
+    @Column(nullable = false)
     private Integer cantidadGanadores;
 
     @Column(nullable = false, precision = 12, scale = 2)
@@ -66,6 +69,8 @@ public class Rifa {
     private LocalDateTime fechaCreacion = LocalDateTime.now();
 
     private LocalDateTime fechaSorteo;
+
+    private LocalDateTime fechaFinalizacion;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
@@ -148,6 +153,14 @@ public class Rifa {
         this.cantidadFilas = cantidadFilas;
     }
 
+    public Integer getNumeroInicial() {
+        return numeroInicial;
+    }
+
+    public void setNumeroInicial(Integer numeroInicial) {
+        this.numeroInicial = numeroInicial;
+    }
+
     public Integer getCantidadGanadores() {
         return cantidadGanadores;
     }
@@ -190,6 +203,14 @@ public class Rifa {
 
     public void setFechaSorteo(LocalDateTime fechaSorteo) {
         this.fechaSorteo = fechaSorteo;
+    }
+
+    public LocalDateTime getFechaFinalizacion() {
+        return fechaFinalizacion;
+    }
+
+    public void setFechaFinalizacion(LocalDateTime fechaFinalizacion) {
+        this.fechaFinalizacion = fechaFinalizacion;
     }
 
     public EstadoRifa getEstado() {

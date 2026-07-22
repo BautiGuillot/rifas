@@ -12,6 +12,7 @@ public record AliasCobroRifaResponse(
         BigDecimal valorNumero,
         LocalDateTime fechaCreacion,
         LocalDateTime fechaSorteo,
+        LocalDateTime fechaFinalizacion,
         Long comprasPendientes,
         Long comprasAprobadas,
         Long comprasCanceladas,
