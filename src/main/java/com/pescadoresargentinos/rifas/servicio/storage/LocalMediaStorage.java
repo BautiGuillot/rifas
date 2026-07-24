@@ -29,13 +29,14 @@ public class LocalMediaStorage implements MediaStorage {
     @Override
     public MediaGuardado guardarImagen(String carpeta, Long ownerId, MultipartFile archivo) {
         try {
-            validarImagen(archivo);
+            ArchivoSeguro.validarCarpetaMediaPublica(carpeta);
+            String contentType = ArchivoSeguro.validarImagen(archivo);
             String nombreOriginal = nombreOriginal(archivo);
-            String referencia = carpeta + "/" + ownerId + "/" + UUID.randomUUID() + extension(nombreOriginal);
+            String referencia = carpeta + "/" + ownerId + "/" + UUID.randomUUID() + ArchivoSeguro.extension(contentType);
             Path destino = mediaPath.resolve(referencia).normalize();
             Files.createDirectories(destino.getParent());
             archivo.transferTo(destino);
-            return new MediaGuardado(referencia, urlPublica(referencia), nombreOriginal, archivo.getContentType());
+            return new MediaGuardado(referencia, urlPublica(referencia), nombreOriginal, contentType);
         } catch (IOException ex) {
             throw new IllegalStateException("No se pudo guardar la imagen");
         }
@@ -43,6 +44,9 @@ public class LocalMediaStorage implements MediaStorage {
 
     @Override
     public Optional<ComprobanteArchivo> abrir(String referencia) {
+        if (!ArchivoSeguro.esReferenciaMediaPublica(referencia)) {
+            return Optional.empty();
+        }
         Path path = mediaPath.resolve(referencia).normalize();
         if (!path.startsWith(mediaPath.normalize()) || !Files.exists(path)) {
             return Optional.empty();
@@ -58,25 +62,10 @@ public class LocalMediaStorage implements MediaStorage {
         return publicBaseUrl.replaceAll("/$", "") + "/" + referencia;
     }
 
-    private void validarImagen(MultipartFile archivo) {
-        String contentType = archivo.getContentType() == null ? "" : archivo.getContentType();
-        if (!contentType.startsWith("image/")) {
-            throw new IllegalArgumentException("El archivo debe ser una imagen");
-        }
-        if (archivo.getSize() > 5 * 1024 * 1024) {
-            throw new IllegalArgumentException("La imagen no puede superar 5 MB");
-        }
-    }
-
     private String nombreOriginal(MultipartFile archivo) {
         return archivo.getOriginalFilename() == null || archivo.getOriginalFilename().isBlank()
                 ? "imagen"
                 : archivo.getOriginalFilename();
-    }
-
-    private String extension(String nombreOriginal) {
-        int punto = nombreOriginal.lastIndexOf('.');
-        return punto >= 0 ? nombreOriginal.substring(punto).toLowerCase() : "";
     }
 
     private String contentType(Path path) {

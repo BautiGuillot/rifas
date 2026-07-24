@@ -26,6 +26,8 @@ public interface CompraRepositorio extends JpaRepository<Compra, Long> {
 
     List<Compra> findByRifaIdAndEstado(Long rifaId, EstadoCompra estado);
 
+    Optional<Compra> findByIdAndTokenSeguimiento(Long id, String tokenSeguimiento);
+
     @EntityGraph(attributePaths = {"rifa", "comprador", "numeros"})
     List<Compra> findByEstadoAndComprobanteArchivoIsNullAndComprobanteWhatsappFalseAndFechaExpiracionBefore(EstadoCompra estado, LocalDateTime fecha);
 

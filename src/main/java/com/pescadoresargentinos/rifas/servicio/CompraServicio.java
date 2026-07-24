@@ -14,6 +14,7 @@ import com.pescadoresargentinos.rifas.repositorio.CompraRepositorio;
 import com.pescadoresargentinos.rifas.repositorio.NumeroRifaRepositorio;
 import com.pescadoresargentinos.rifas.repositorio.RifaRepositorio;
 import com.pescadoresargentinos.rifas.seguridad.UsuarioActual;
+import com.pescadoresargentinos.rifas.servicio.storage.ArchivoSeguro;
 import com.pescadoresargentinos.rifas.servicio.storage.ComprobanteArchivo;
 import com.pescadoresargentinos.rifas.servicio.storage.ComprobanteGuardado;
 import com.pescadoresargentinos.rifas.servicio.storage.ComprobanteStorage;
@@ -146,8 +147,8 @@ public class CompraServicio {
     }
 
     @Transactional
-    public CompraResponse cargarComprobante(Long compraId, MultipartFile archivo) {
-        Compra compra = buscarCompra(compraId);
+    public CompraResponse cargarComprobante(Long compraId, String tokenSeguimiento, MultipartFile archivo) {
+        Compra compra = buscarCompraPublica(compraId, tokenSeguimiento);
         cancelarSiVencidaSinComprobante(compra);
         if (compra.getEstado() != EstadoCompra.PENDIENTE_PAGO) {
             throw new IllegalStateException("Solo se puede cargar comprobante en compras pendientes");
@@ -165,8 +166,8 @@ public class CompraServicio {
     }
 
     @Transactional
-    public CompraResponse marcarComprobanteEnviadoPorWhatsapp(Long compraId) {
-        Compra compra = buscarCompra(compraId);
+    public CompraResponse marcarComprobanteEnviadoPorWhatsapp(Long compraId, String tokenSeguimiento) {
+        Compra compra = buscarCompraPublica(compraId, tokenSeguimiento);
         cancelarSiVencidaSinComprobante(compra);
 
         // La pantalla publica puede quedar unos segundos desactualizada mientras
@@ -192,7 +193,7 @@ public class CompraServicio {
         if (compra.getEstado() != EstadoCompra.PENDIENTE_PAGO) {
             return false;
         }
-        validarArchivoComprobante(contentType, contenido == null ? 0 : contenido.length);
+        validarArchivoComprobante(contentType, contenido);
         ComprobanteGuardado comprobante = comprobanteStorage.guardar(compraId, nombreOriginal, contentType, contenido);
         compra.setComprobanteArchivo(comprobante.referencia());
         compra.setComprobanteNombreOriginal(comprobante.nombreOriginal());
@@ -211,24 +212,30 @@ public class CompraServicio {
     }
 
     @Transactional(readOnly = true)
-    public Optional<Compra> buscarCompraPendientePorId(Long compraId) {
+    public Optional<Compra> buscarCompraPendientePorIdYWhatsapp(
+            Long compraId,
+            String twilioTo,
+            String compradorTelefono
+    ) {
+        String destinatario = normalizarTelefonoWhatsapp(twilioTo);
+        String remitente = normalizarTelefonoWhatsapp(compradorTelefono);
         return compraRepositorio.findById(compraId)
-                .filter(compra -> compra.getEstado() == EstadoCompra.PENDIENTE_PAGO);
+                .filter(compra -> compra.getEstado() == EstadoCompra.PENDIENTE_PAGO)
+                .filter(compra -> compra.getComprador().getTelefono().equals(remitente))
+                .filter(compra -> compra.getRifa().getCliente() != null)
+                .filter(compra -> destinatario.equals(compra.getRifa().getCliente().getTwilioWhatsappFrom()));
     }
 
     @Transactional
-    public CompraResponse expirarSiVencida(Long compraId) {
-        Compra compra = buscarCompra(compraId);
+    public CompraResponse expirarSiVencida(Long compraId, String tokenSeguimiento) {
+        Compra compra = buscarCompraPublica(compraId, tokenSeguimiento);
         cancelarSiVencidaSinComprobante(compra);
         return aResponse(compra);
     }
 
     @Transactional
     public CompraSeguimientoResponse seguimientoPublico(Long compraId, String tokenSeguimiento) {
-        Compra compra = buscarCompra(compraId);
-        if (tokenSeguimiento == null || !tokenSeguimiento.equals(compra.getTokenSeguimiento())) {
-            throw new SecurityException("No tenes permiso para consultar esta compra");
-        }
+        Compra compra = buscarCompraPublica(compraId, tokenSeguimiento);
         cancelarSiVencidaSinComprobante(compra);
         return new CompraSeguimientoResponse(
                 compra.getEstado(),
@@ -298,22 +305,20 @@ public class CompraServicio {
                 .orElseThrow(() -> new IllegalArgumentException("No existe la compra " + compraId));
     }
 
-    private void validarArchivoComprobante(MultipartFile archivo) {
-        String contentType = archivo.getContentType() == null ? "" : archivo.getContentType();
-        validarArchivoComprobante(contentType, archivo.getSize());
+    private Compra buscarCompraPublica(Long compraId, String tokenSeguimiento) {
+        if (tokenSeguimiento == null || tokenSeguimiento.isBlank()) {
+            throw new SecurityException("No tenes permiso para operar esta compra");
+        }
+        return compraRepositorio.findByIdAndTokenSeguimiento(compraId, tokenSeguimiento)
+                .orElseThrow(() -> new SecurityException("No tenes permiso para operar esta compra"));
     }
 
-    private void validarArchivoComprobante(String contentType, long size) {
-        String tipo = contentType == null ? "" : contentType;
-        if (!tipo.startsWith("image/") && !tipo.equals("application/pdf")) {
-            throw new IllegalArgumentException("El comprobante debe ser una imagen o PDF");
-        }
-        if (size <= 0) {
-            throw new IllegalArgumentException("El comprobante es obligatorio");
-        }
-        if (size > 5 * 1024 * 1024) {
-            throw new IllegalArgumentException("El comprobante no puede superar 5 MB");
-        }
+    private void validarArchivoComprobante(MultipartFile archivo) {
+        ArchivoSeguro.validarComprobante(archivo);
+    }
+
+    private void validarArchivoComprobante(String contentType, byte[] contenido) {
+        ArchivoSeguro.validarComprobante(contentType, contenido);
     }
 
     private void validarTieneComprobanteArchivo(Compra compra) {

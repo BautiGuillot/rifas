@@ -3,6 +3,7 @@ package com.pescadoresargentinos.rifas.api;
 import com.pescadoresargentinos.rifas.api.dto.CompraResponse;
 import com.pescadoresargentinos.rifas.dominio.EstadoCompra;
 import com.pescadoresargentinos.rifas.servicio.CompraServicio;
+import com.pescadoresargentinos.rifas.servicio.storage.ArchivoSeguro;
 import com.pescadoresargentinos.rifas.servicio.storage.ComprobanteArchivo;
 import java.net.URI;
 import java.util.List;
@@ -47,9 +48,18 @@ public class AdminCompraController {
                 .<ResponseEntity<?>>map(uri -> ResponseEntity.status(302).location(uri).build())
                 .orElseGet(() -> {
                     ComprobanteArchivo archivo = compraServicio.abrirComprobante(id);
+                    boolean imagenSegura = ArchivoSeguro.esImagenRasterSegura(archivo.contentType());
+                    MediaType contentType = imagenSegura
+                            ? MediaType.parseMediaType(ArchivoSeguro.normalizarContentType(archivo.contentType()))
+                            : MediaType.APPLICATION_OCTET_STREAM;
                     return ResponseEntity.ok()
-                            .contentType(MediaType.parseMediaType(archivo.contentType()))
-                            .header(HttpHeaders.CONTENT_DISPOSITION, "inline; filename=\"" + archivo.nombreArchivo() + "\"")
+                            .contentType(contentType)
+                            .header(
+                                    HttpHeaders.CONTENT_DISPOSITION,
+                                    (imagenSegura ? "inline" : "attachment") + "; filename=\"comprobante"
+                                            + ArchivoSeguro.extension(archivo.contentType()) + "\""
+                            )
+                            .header("Content-Security-Policy", "sandbox; default-src 'none'")
                             .body(archivo.resource());
                 });
     }

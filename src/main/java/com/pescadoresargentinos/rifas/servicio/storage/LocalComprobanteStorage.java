@@ -26,11 +26,12 @@ public class LocalComprobanteStorage implements ComprobanteStorage {
     public ComprobanteGuardado guardar(Long compraId, MultipartFile archivo) {
         try {
             Files.createDirectories(comprobantesPath);
+            String contentType = ArchivoSeguro.validarComprobante(archivo);
             String nombreOriginal = nombreOriginal(archivo);
-            String nombreArchivo = compraId + "-" + UUID.randomUUID() + extension(nombreOriginal);
+            String nombreArchivo = compraId + "-" + UUID.randomUUID() + ArchivoSeguro.extension(contentType);
             Path destino = comprobantesPath.resolve(nombreArchivo).normalize();
             archivo.transferTo(destino);
-            return new ComprobanteGuardado(destino.toString(), nombreOriginal, archivo.getContentType());
+            return new ComprobanteGuardado(destino.toString(), nombreOriginal, contentType);
         } catch (IOException ex) {
             throw new IllegalStateException("No se pudo guardar el comprobante");
         }
@@ -40,11 +41,12 @@ public class LocalComprobanteStorage implements ComprobanteStorage {
     public ComprobanteGuardado guardar(Long compraId, String nombreOriginal, String contentType, byte[] contenido) {
         try {
             Files.createDirectories(comprobantesPath);
+            String contentTypeSeguro = ArchivoSeguro.validarComprobante(contentType, contenido);
             String nombreSeguro = nombreSeguro(nombreOriginal);
-            String nombreArchivo = compraId + "-" + UUID.randomUUID() + extension(nombreSeguro);
+            String nombreArchivo = compraId + "-" + UUID.randomUUID() + ArchivoSeguro.extension(contentTypeSeguro);
             Path destino = comprobantesPath.resolve(nombreArchivo).normalize();
             Files.write(destino, contenido);
-            return new ComprobanteGuardado(destino.toString(), nombreSeguro, contentType);
+            return new ComprobanteGuardado(destino.toString(), nombreSeguro, contentTypeSeguro);
         } catch (IOException ex) {
             throw new IllegalStateException("No se pudo guardar el comprobante");
         }
@@ -72,11 +74,6 @@ public class LocalComprobanteStorage implements ComprobanteStorage {
         return archivo.getOriginalFilename() == null || archivo.getOriginalFilename().isBlank()
                 ? "comprobante"
                 : archivo.getOriginalFilename();
-    }
-
-    private String extension(String nombreOriginal) {
-        int punto = nombreOriginal.lastIndexOf('.');
-        return punto >= 0 ? nombreOriginal.substring(punto).toLowerCase() : "";
     }
 
     private String nombreSeguro(String nombreOriginal) {

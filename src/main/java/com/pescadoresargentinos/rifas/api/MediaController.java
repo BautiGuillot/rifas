@@ -1,6 +1,7 @@
 package com.pescadoresargentinos.rifas.api;
 
 import com.pescadoresargentinos.rifas.servicio.storage.ComprobanteArchivo;
+import com.pescadoresargentinos.rifas.servicio.storage.ArchivoSeguro;
 import com.pescadoresargentinos.rifas.servicio.storage.MediaStorage;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.CacheControl;
@@ -27,10 +28,21 @@ public class MediaController {
         String referencia = request.getRequestURI().substring(request.getRequestURI().indexOf(prefix) + prefix.length());
         ComprobanteArchivo archivo = mediaStorage.abrir(referencia)
                 .orElseThrow(() -> new IllegalArgumentException("No se encontro la imagen"));
+        boolean imagenSegura = ArchivoSeguro.esImagenRasterSegura(archivo.contentType());
         return ResponseEntity.ok()
                 .cacheControl(CacheControl.noCache())
-                .header(HttpHeaders.CONTENT_DISPOSITION, ContentDisposition.inline().filename(archivo.nombreArchivo()).build().toString())
-                .header(HttpHeaders.CONTENT_TYPE, archivo.contentType())
+                .header(
+                        HttpHeaders.CONTENT_DISPOSITION,
+                        (imagenSegura ? ContentDisposition.inline() : ContentDisposition.attachment())
+                                .filename(imagenSegura ? archivo.nombreArchivo() : "archivo-no-confiable")
+                                .build()
+                                .toString()
+                )
+                .header(
+                        HttpHeaders.CONTENT_TYPE,
+                        imagenSegura ? ArchivoSeguro.normalizarContentType(archivo.contentType()) : "application/octet-stream"
+                )
+                .header("Content-Security-Policy", "sandbox; default-src 'none'")
                 .body(archivo.resource());
     }
 }

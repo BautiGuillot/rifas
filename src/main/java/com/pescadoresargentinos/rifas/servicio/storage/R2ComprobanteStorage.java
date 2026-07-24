@@ -47,16 +47,17 @@ public class R2ComprobanteStorage implements ComprobanteStorage {
     @Override
     public ComprobanteGuardado guardar(Long compraId, MultipartFile archivo) {
         try {
+            String contentType = ArchivoSeguro.validarComprobante(archivo);
             String nombreOriginal = nombreOriginal(archivo);
-            String key = "comprobantes/" + compraId + "/" + UUID.randomUUID() + extension(nombreOriginal);
+            String key = "comprobantes/" + compraId + "/" + UUID.randomUUID() + ArchivoSeguro.extension(contentType);
             PutObjectRequest request = PutObjectRequest.builder()
                     .bucket(bucket)
                     .key(key)
-                    .contentType(archivo.getContentType())
+                    .contentType(contentType)
                     .metadata(java.util.Map.of("nombre-original", nombreOriginal))
                     .build();
             s3Client.putObject(request, RequestBody.fromBytes(archivo.getBytes()));
-            return new ComprobanteGuardado(key, nombreOriginal, archivo.getContentType());
+            return new ComprobanteGuardado(key, nombreOriginal, contentType);
         } catch (IOException ex) {
             throw new IllegalStateException("No se pudo guardar el comprobante");
         }
@@ -64,16 +65,17 @@ public class R2ComprobanteStorage implements ComprobanteStorage {
 
     @Override
     public ComprobanteGuardado guardar(Long compraId, String nombreOriginal, String contentType, byte[] contenido) {
+        String contentTypeSeguro = ArchivoSeguro.validarComprobante(contentType, contenido);
         String nombreSeguro = nombreSeguro(nombreOriginal);
-        String key = "comprobantes/" + compraId + "/" + UUID.randomUUID() + extension(nombreSeguro);
+        String key = "comprobantes/" + compraId + "/" + UUID.randomUUID() + ArchivoSeguro.extension(contentTypeSeguro);
         PutObjectRequest request = PutObjectRequest.builder()
                 .bucket(bucket)
                 .key(key)
-                .contentType(contentType)
+                .contentType(contentTypeSeguro)
                 .metadata(java.util.Map.of("nombre-original", nombreSeguro))
                 .build();
         s3Client.putObject(request, RequestBody.fromBytes(contenido));
-        return new ComprobanteGuardado(key, nombreSeguro, contentType);
+        return new ComprobanteGuardado(key, nombreSeguro, contentTypeSeguro);
     }
 
     @Override
@@ -99,11 +101,6 @@ public class R2ComprobanteStorage implements ComprobanteStorage {
         return archivo.getOriginalFilename() == null || archivo.getOriginalFilename().isBlank()
                 ? "comprobante"
                 : archivo.getOriginalFilename();
-    }
-
-    private String extension(String nombreOriginal) {
-        int punto = nombreOriginal.lastIndexOf('.');
-        return punto >= 0 ? nombreOriginal.substring(punto).toLowerCase() : "";
     }
 
     private String nombreSeguro(String nombreOriginal) {

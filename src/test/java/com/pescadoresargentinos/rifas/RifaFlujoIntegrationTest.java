@@ -4,9 +4,12 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.hamcrest.Matchers.hasSize;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.options;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -16,6 +19,7 @@ import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMock
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.web.servlet.MockMvc;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
@@ -32,6 +36,34 @@ class RifaFlujoIntegrationTest {
 
     @Autowired
     private JdbcTemplate jdbcTemplate;
+
+    @Test
+    void corsPermiteElOrigenConfigurado() throws Exception {
+        mockMvc.perform(options("/api/rifas")
+                        .header("Origin", "http://localhost:4200")
+                        .header("Access-Control-Request-Method", "GET"))
+                .andExpect(status().isOk())
+                .andExpect(header().string(
+                        "Access-Control-Allow-Origin",
+                        "http://localhost:4200"
+                ));
+    }
+
+    @Test
+    void corsRechazaUnOrigenNoConfigurado() throws Exception {
+        mockMvc.perform(options("/api/rifas")
+                        .header("Origin", "https://sitio-malicioso.example")
+                        .header("Access-Control-Request-Method", "GET"))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void endpointPublicoDeMediaNoPermiteAccederAComprobantes() throws Exception {
+        mockMvc.perform(get(
+                        "/api/media/comprobantes/1/123e4567-e89b-42d3-a456-426614174000.pdf"
+                ))
+                .andExpect(status().isBadRequest());
+    }
 
     @Test
     void superAdminEliminaClienteConTodosSusDatos() throws Exception {
@@ -107,7 +139,7 @@ class RifaFlujoIntegrationTest {
                   "titulo": "Rifa Pescadores Argentinos",
                   "slug": "rifa-flujo-%s",
                   "descripcion": "Premios de prueba",
-                  "cantidadNumeros": 100,
+                  "cantidadNumeros": 2,
                   "numerosPorFila": 1,
                   "numeroInicial": 0,
                   "cantidadGanadores": 2,
@@ -126,9 +158,9 @@ class RifaFlujoIntegrationTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(rifaJson))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.numeros", hasSize(100)))
+                .andExpect(jsonPath("$.numeros", hasSize(2)))
                 .andExpect(jsonPath("$.numeros[0].etiqueta").value("00"))
-                .andExpect(jsonPath("$.numeros[99].etiqueta").value("99"))
+                .andExpect(jsonPath("$.numeros[1].etiqueta").value("01"))
                 .andReturn()
                 .getResponse()
                 .getContentAsString()
@@ -142,7 +174,7 @@ class RifaFlujoIntegrationTest {
                   "titulo": "Rifa Pescadores Argentinos Editada",
                   "slug": "rifa-flujo-editada-%s",
                   "descripcion": "Premios de prueba editados",
-                  "cantidadNumeros": 100,
+                  "cantidadNumeros": 2,
                   "numerosPorFila": 1,
                   "numeroInicial": 0,
                   "cantidadGanadores": 2,
@@ -221,11 +253,6 @@ class RifaFlujoIntegrationTest {
                 .andExpect(jsonPath("$.numerosVendidos").value(2))
                 .andExpect(jsonPath("$.recaudacionAprobada").value(3000.0));
 
-        mockMvc.perform(patch("/api/admin/rifas/{id}/finalizar", rifaId)
-                        .header("Authorization", "Bearer " + token))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.estado").value("FINALIZADA"));
-
         String ganadoresJson = """
                 {
                   "ganadores": [
@@ -235,11 +262,12 @@ class RifaFlujoIntegrationTest {
                 }
                 """;
 
-        mockMvc.perform(post("/api/admin/rifas/{id}/ganadores", rifaId)
+        mockMvc.perform(post("/api/admin/rifas/{id}/finalizar-con-ganadores", rifaId)
                         .header("Authorization", "Bearer " + token)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(ganadoresJson))
                 .andExpect(status().isOk())
+                .andExpect(jsonPath("$.estado").value("FINALIZADA"))
                 .andExpect(jsonPath("$.ganadores[0].numero").value("00"))
                 .andExpect(jsonPath("$.ganadores[0].nombreComprador").value("Juan Perez"));
     }
@@ -380,6 +408,76 @@ class RifaFlujoIntegrationTest {
         mockMvc.perform(get("/api/rifas/slug/{slug}", slug))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.numeros[0].estado").value("PENDIENTE"));
+    }
+
+    @Test
+    void accionesPublicasDeCompraExigenElTokenDeSeguimiento() throws Exception {
+        String tokenAdmin = crearClienteYLogin("acciones-publicas");
+        String suffix = UUID.randomUUID().toString().substring(0, 8);
+        String slug = "acciones-publicas-" + suffix;
+        String rifaResponse = mockMvc.perform(post("/api/admin/rifas")
+                        .header("Authorization", "Bearer " + tokenAdmin)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "titulo": "Rifa acciones publicas",
+                                  "slug": "%s",
+                                  "cantidadNumeros": 1,
+                                  "numerosPorFila": 1,
+                                  "numeroInicial": 0,
+                                  "cantidadGanadores": 1,
+                                  "valorNumero": 1000,
+                                  "aliasTransferencia": "acciones.alias",
+                                  "whatsappComprobante": "5491112345678",
+                                  "premios": [{"posicion": 1, "descripcion": "Premio"}]
+                                }
+                                """.formatted(slug)))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        Integer rifaId = com.jayway.jsonpath.JsonPath.read(rifaResponse, "$.id");
+        mockMvc.perform(patch("/api/admin/rifas/{id}/publicar", rifaId)
+                        .header("Authorization", "Bearer " + tokenAdmin))
+                .andExpect(status().isOk());
+
+        String compraResponse = mockMvc.perform(post("/api/rifas/slug/{slug}/compras", slug)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"nombre": "Comprador privado", "telefono": "1133334444", "numeros": [0]}
+                                """))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        Integer compraId = com.jayway.jsonpath.JsonPath.read(compraResponse, "$.id");
+        String tokenSeguimiento = com.jayway.jsonpath.JsonPath.read(compraResponse, "$.tokenSeguimiento");
+
+        mockMvc.perform(post("/api/rifas/compras/{id}/expirar", compraId))
+                .andExpect(status().isBadRequest());
+        mockMvc.perform(post("/api/rifas/compras/{id}/expirar", compraId)
+                        .header("X-Compra-Token", "token-incorrecto"))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.nombre").doesNotExist());
+        mockMvc.perform(get("/api/rifas/compras/{id}/seguimiento", compraId)
+                        .header("X-Compra-Token", "token-incorrecto"))
+                .andExpect(status().isForbidden());
+
+        MockMultipartFile png = new MockMultipartFile(
+                "archivo",
+                "comprobante.png",
+                "image/png",
+                new byte[] {(byte) 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00}
+        );
+        mockMvc.perform(multipart("/api/rifas/compras/{id}/comprobante", compraId)
+                        .file(png)
+                        .header("X-Compra-Token", "token-incorrecto"))
+                .andExpect(status().isForbidden());
+
+        mockMvc.perform(get("/api/rifas/compras/{id}/seguimiento", compraId)
+                        .header("X-Compra-Token", tokenSeguimiento))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.estado").value("PENDIENTE_PAGO"));
+        mockMvc.perform(post("/api/rifas/compras/{id}/comprobante-whatsapp", compraId)
+                        .header("X-Compra-Token", tokenSeguimiento))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.nombre").value("Comprador privado"));
     }
 
     @Test

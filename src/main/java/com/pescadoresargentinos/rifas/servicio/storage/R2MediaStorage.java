@@ -50,17 +50,18 @@ public class R2MediaStorage implements MediaStorage {
     @Override
     public MediaGuardado guardarImagen(String carpeta, Long ownerId, MultipartFile archivo) {
         try {
-            validarImagen(archivo);
+            ArchivoSeguro.validarCarpetaMediaPublica(carpeta);
+            String contentType = ArchivoSeguro.validarImagen(archivo);
             String nombreOriginal = nombreOriginal(archivo);
-            String key = carpeta + "/" + ownerId + "/" + UUID.randomUUID() + extension(nombreOriginal);
+            String key = carpeta + "/" + ownerId + "/" + UUID.randomUUID() + ArchivoSeguro.extension(contentType);
             PutObjectRequest request = PutObjectRequest.builder()
                     .bucket(bucket)
                     .key(key)
-                    .contentType(archivo.getContentType())
+                    .contentType(contentType)
                     .metadata(java.util.Map.of("nombre-original", nombreOriginal))
                     .build();
             s3Client.putObject(request, RequestBody.fromBytes(archivo.getBytes()));
-            return new MediaGuardado(key, urlPublica(key), nombreOriginal, archivo.getContentType());
+            return new MediaGuardado(key, urlPublica(key), nombreOriginal, contentType);
         } catch (IOException ex) {
             throw new IllegalStateException("No se pudo guardar la imagen");
         }
@@ -68,6 +69,9 @@ public class R2MediaStorage implements MediaStorage {
 
     @Override
     public Optional<ComprobanteArchivo> abrir(String referencia) {
+        if (!ArchivoSeguro.esReferenciaMediaPublica(referencia)) {
+            return Optional.empty();
+        }
         GetObjectRequest request = GetObjectRequest.builder()
                 .bucket(bucket)
                 .key(referencia)
@@ -83,25 +87,10 @@ public class R2MediaStorage implements MediaStorage {
         return publicBaseUrl.replaceAll("/$", "") + "/" + referencia;
     }
 
-    private void validarImagen(MultipartFile archivo) {
-        String contentType = archivo.getContentType() == null ? "" : archivo.getContentType();
-        if (!contentType.startsWith("image/")) {
-            throw new IllegalArgumentException("El archivo debe ser una imagen");
-        }
-        if (archivo.getSize() > 5 * 1024 * 1024) {
-            throw new IllegalArgumentException("La imagen no puede superar 5 MB");
-        }
-    }
-
     private String nombreOriginal(MultipartFile archivo) {
         return archivo.getOriginalFilename() == null || archivo.getOriginalFilename().isBlank()
                 ? "imagen"
                 : archivo.getOriginalFilename();
-    }
-
-    private String extension(String nombreOriginal) {
-        int punto = nombreOriginal.lastIndexOf('.');
-        return punto >= 0 ? nombreOriginal.substring(punto).toLowerCase() : "";
     }
 
     private String nombreSeguro(String referencia) {

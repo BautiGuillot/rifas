@@ -7,14 +7,23 @@ import com.pescadoresargentinos.rifas.configuracion.TwilioProperties;
 import com.pescadoresargentinos.rifas.dominio.Cliente;
 import com.pescadoresargentinos.rifas.dominio.Compra;
 import com.pescadoresargentinos.rifas.dominio.NumeroRifa;
+import com.pescadoresargentinos.rifas.servicio.storage.ArchivoSeguro;
+import java.io.IOException;
+import java.io.InputStream;
 import java.math.BigDecimal;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.text.NumberFormat;
+import java.time.Duration;
 import java.util.Base64;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.Locale;
 import java.util.Map;
+import java.util.regex.Pattern;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
 import org.springframework.util.LinkedMultiValueMap;
@@ -24,14 +33,25 @@ import org.springframework.web.client.RestClient;
 @Service
 public class TwilioWhatsappServicio {
 
+    private static final Duration MEDIA_CONNECT_TIMEOUT = Duration.ofSeconds(5);
+    private static final Duration MEDIA_REQUEST_TIMEOUT = Duration.ofSeconds(15);
+    private static final Pattern MENSAJE_Y_MEDIA_PATH = Pattern.compile(
+            "[A-Z]{2}[0-9a-fA-F]{32}/Media/ME[0-9a-fA-F]{32}"
+    );
+
     private final TwilioProperties properties;
     private final ObjectMapper objectMapper;
     private final RestClient restClient;
+    private final HttpClient mediaHttpClient;
 
     public TwilioWhatsappServicio(TwilioProperties properties, ObjectMapper objectMapper, RestClient.Builder restClientBuilder) {
         this.properties = properties;
         this.objectMapper = objectMapper;
         this.restClient = restClientBuilder.build();
+        this.mediaHttpClient = HttpClient.newBuilder()
+                .connectTimeout(MEDIA_CONNECT_TIMEOUT)
+                .followRedirects(HttpClient.Redirect.NEVER)
+                .build();
     }
 
     public TwilioEnvioResultado enviarMensajeCompra(Compra compra) {
@@ -76,18 +96,49 @@ public class TwilioWhatsappServicio {
     }
 
     public byte[] descargarMedia(String mediaUrl) {
-        return restClient.get()
-                .uri(mediaUrl)
-                .headers(headers -> headers.setBasicAuth(properties.getAccountSid(), properties.getAuthToken(), StandardCharsets.UTF_8))
-                .retrieve()
-                .body(byte[].class);
+        if (!properties.credencialesConfiguradas()) {
+            throw new SecurityException("Twilio no esta configurado");
+        }
+        URI uri = validarMediaUrl(mediaUrl);
+        String credenciales = Base64.getEncoder().encodeToString(
+                (properties.getAccountSid() + ":" + properties.getAuthToken()).getBytes(StandardCharsets.UTF_8)
+        );
+        HttpRequest request = HttpRequest.newBuilder(uri)
+                .timeout(MEDIA_REQUEST_TIMEOUT)
+                .header("Authorization", "Basic " + credenciales)
+                .GET()
+                .build();
+        try {
+            HttpResponse<InputStream> response = mediaHttpClient.send(request, HttpResponse.BodyHandlers.ofInputStream());
+            if (response.statusCode() < 200 || response.statusCode() >= 300) {
+                response.body().close();
+                throw new IllegalStateException("Twilio no devolvio el archivo solicitado");
+            }
+            long contentLength = response.headers().firstValueAsLong("Content-Length").orElse(-1);
+            if (contentLength > ArchivoSeguro.TAMANO_MAXIMO) {
+                response.body().close();
+                throw new IllegalArgumentException("El comprobante no puede superar 5 MB");
+            }
+            try (InputStream contenido = response.body()) {
+                byte[] bytes = contenido.readNBytes((int) ArchivoSeguro.TAMANO_MAXIMO + 1);
+                if (bytes.length > ArchivoSeguro.TAMANO_MAXIMO) {
+                    throw new IllegalArgumentException("El comprobante no puede superar 5 MB");
+                }
+                return bytes;
+            }
+        } catch (InterruptedException ex) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("Se interrumpio la descarga del comprobante");
+        } catch (IOException ex) {
+            throw new IllegalStateException("No se pudo descargar el comprobante desde Twilio");
+        }
     }
 
     public boolean validarFirma(String url, MultiValueMap<String, String> parametros, String firmaRecibida) {
-        if (!properties.isValidateSignature()) {
-            return true;
-        }
-        if (esVacio(firmaRecibida) || esVacio(properties.getAuthToken())) {
+        if (!properties.isEnabled()
+                || !properties.isValidateSignature()
+                || !properties.credencialesConfiguradas()
+                || esVacio(firmaRecibida)) {
             return false;
         }
         try {
@@ -112,6 +163,33 @@ public class TwilioWhatsappServicio {
             return requestUrl;
         }
         return properties.getWebhookBaseUrl().replaceAll("/+$", "") + "/api/twilio/whatsapp/webhook";
+    }
+
+    URI validarMediaUrl(String mediaUrl) {
+        if (mediaUrl == null || mediaUrl.isBlank()) {
+            throw new SecurityException("URL de media de Twilio invalida");
+        }
+
+        try {
+            URI uri = URI.create(mediaUrl);
+            String prefijo = "/2010-04-01/Accounts/" + properties.getAccountSid() + "/Messages/";
+            String resto = uri.getPath() != null && uri.getPath().startsWith(prefijo)
+                    ? uri.getPath().substring(prefijo.length())
+                    : "";
+            boolean segura = "https".equalsIgnoreCase(uri.getScheme())
+                    && "api.twilio.com".equalsIgnoreCase(uri.getHost())
+                    && (uri.getPort() == -1 || uri.getPort() == 443)
+                    && uri.getRawUserInfo() == null
+                    && uri.getRawQuery() == null
+                    && uri.getRawFragment() == null
+                    && MENSAJE_Y_MEDIA_PATH.matcher(resto).matches();
+            if (!segura) {
+                throw new SecurityException("URL de media de Twilio invalida");
+            }
+            return uri;
+        } catch (IllegalArgumentException ex) {
+            throw new SecurityException("URL de media de Twilio invalida");
+        }
     }
 
     private String variablesTemplate(Compra compra, Cliente cliente) {

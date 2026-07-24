@@ -5,18 +5,13 @@ Backend Spring Boot para el sistema SaaS de rifas.
 ## Desarrollo
 
 ```bash
-mvn spring-boot:run
+mvn spring-boot:run -Dspring-boot.run.profiles=local
 ```
 
 La API queda disponible en `http://localhost:8080`.
 
-Base de datos de desarrollo:
-
-- H2 en memoria
-- Consola: `http://localhost:8080/h2-console`
-- JDBC URL: `jdbc:h2:mem:rifas`
-- Usuario: `sa`
-- Password: vacio
+El runtime utiliza PostgreSQL. H2 se incluye solamente durante los tests y su
+consola no se publica.
 
 Super admin inicial de desarrollo:
 
@@ -107,7 +102,56 @@ Variables soportadas en dev:
 - `R2_ACCESS_KEY`
 - `R2_SECRET_KEY`
 - `R2_REGION`
-- `MEDIA_PUBLIC_BASE_URL`
+
+El unico bucket R2 debe permanecer privado: no se debe habilitar una URL
+`r2.dev`, un Custom Domain ni `MEDIA_PUBLIC_BASE_URL`. El backend usa el mismo
+bucket para `comprobantes/`, `logos/` y `premios/`, pero el endpoint publico
+`/api/media/**` solo admite objetos bajo `logos/` y `premios/`.
+
+`R2_ENDPOINT` debe tener el formato
+`https://<ACCOUNT_ID>.r2.cloudflarestorage.com`, sin agregar el nombre del
+bucket al final.
+
+## Produccion
+
+Arrancar siempre con el perfil `prod`:
+
+```bash
+java -jar target/rifas-backend-0.0.1-SNAPSHOT.jar --spring.profiles.active=prod
+```
+
+Ademas de las variables anteriores, produccion requiere:
+
+- `DATABASE_URL`, con una URL JDBC de PostgreSQL
+- `DATABASE_USERNAME`
+- `DATABASE_PASSWORD`
+- `CORS_ALLOWED_ORIGINS`, con la URL HTTPS exacta del frontend y sin `/` final
+- `SUPER_ADMIN_USERNAME`
+- `SUPER_ADMIN_PASSWORD`, con al menos 12 caracteres
+- `JWT_SECRET`, con al menos 32 caracteres aleatorios
+
+El perfil productivo usa `ddl-auto=validate`, desactiva H2, Swagger y los
+mensajes internos de error. La aplicacion rechaza el arranque si falta una
+configuracion obligatoria o si se intenta publicar directamente el bucket R2
+compartido.
+
+Si Twilio esta habilitado tambien se requieren `TWILIO_ACCOUNT_SID`,
+`TWILIO_AUTH_TOKEN` y `TWILIO_WEBHOOK_BASE_URL` con una URL HTTPS publica.
+
+### Render
+
+Crear el backend como **Web Service** usando el `Dockerfile` de este
+repositorio. Spring escucha en `0.0.0.0` y consume automaticamente la variable
+`PORT` que asigna Render; localmente usa el puerto `8080`.
+
+Ejemplo de CORS para un solo frontend:
+
+```text
+CORS_ALLOWED_ORIGINS=https://tu-frontend.onrender.com
+```
+
+Para permitir mas de un frontend, separar los origenes exactos con comas. No
+usar `*`, rutas ni una barra final.
 
 ## Migraciones
 

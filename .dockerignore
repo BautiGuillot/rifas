@@ -1,0 +1,13 @@
+.git
+.gitignore
+.idea
+.vscode
+target
+uploads
+*.log
+*.stdout.log
+*.stderr.log
+.env
+.env.*
+src/main/resources/application-local.properties
+src/main/resources/application-*.local.properties

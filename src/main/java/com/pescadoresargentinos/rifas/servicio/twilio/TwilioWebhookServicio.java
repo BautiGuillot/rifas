@@ -28,7 +28,11 @@ public class TwilioWebhookServicio {
         }
         Optional<Long> compraId = extraerCompraId(parametros.getFirst("Body"));
         Optional<Compra> compra = compraId
-                .flatMap(compraServicio::buscarCompraPendientePorId)
+                .flatMap(id -> compraServicio.buscarCompraPendientePorIdYWhatsapp(
+                        id,
+                        parametros.getFirst("To"),
+                        parametros.getFirst("From")
+                ))
                 .or(() -> compraServicio.buscarCompraPendientePorWhatsapp(parametros.getFirst("To"), parametros.getFirst("From")));
         if (compra.isEmpty()) {
             return false;

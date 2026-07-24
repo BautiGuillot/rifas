@@ -13,8 +13,8 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.multipart.MultipartFile;
@@ -22,6 +22,8 @@ import org.springframework.web.multipart.MultipartFile;
 @RestController
 @RequestMapping("/api/rifas")
 public class RifaPublicaController {
+
+    private static final String COMPRA_TOKEN_HEADER = "X-Compra-Token";
 
     private final RifaServicio rifaServicio;
     private final CompraServicio compraServicio;
@@ -62,22 +64,35 @@ public class RifaPublicaController {
     }
 
     @PostMapping("/compras/{id}/comprobante")
-    public CompraResponse cargarComprobante(@PathVariable Long id, @RequestPart("archivo") MultipartFile archivo) {
-        return compraServicio.cargarComprobante(id, archivo);
+    public CompraResponse cargarComprobante(
+            @PathVariable Long id,
+            @RequestHeader(COMPRA_TOKEN_HEADER) String token,
+            @RequestPart("archivo") MultipartFile archivo
+    ) {
+        return compraServicio.cargarComprobante(id, token, archivo);
     }
 
     @PostMapping("/compras/{id}/comprobante-whatsapp")
-    public CompraResponse marcarComprobanteWhatsapp(@PathVariable Long id) {
-        return compraServicio.marcarComprobanteEnviadoPorWhatsapp(id);
+    public CompraResponse marcarComprobanteWhatsapp(
+            @PathVariable Long id,
+            @RequestHeader(COMPRA_TOKEN_HEADER) String token
+    ) {
+        return compraServicio.marcarComprobanteEnviadoPorWhatsapp(id, token);
     }
 
     @PostMapping("/compras/{id}/expirar")
-    public CompraResponse expirarCompra(@PathVariable Long id) {
-        return compraServicio.expirarSiVencida(id);
+    public CompraResponse expirarCompra(
+            @PathVariable Long id,
+            @RequestHeader(COMPRA_TOKEN_HEADER) String token
+    ) {
+        return compraServicio.expirarSiVencida(id, token);
     }
 
     @GetMapping("/compras/{id}/seguimiento")
-    public CompraSeguimientoResponse seguimientoCompra(@PathVariable Long id, @RequestParam String token) {
+    public CompraSeguimientoResponse seguimientoCompra(
+            @PathVariable Long id,
+            @RequestHeader(COMPRA_TOKEN_HEADER) String token
+    ) {
         return compraServicio.seguimientoPublico(id, token);
     }
 }
