@@ -197,7 +197,7 @@ public class TwilioWhatsappServicio {
         variables.put("1", compra.getComprador().getNombre());
         variables.put("2", compra.getId().toString());
         variables.put("3", compra.getRifa().getTitulo());
-        variables.put("4", compra.getEtiquetasNumeros().isEmpty() ? numerosCompra(compra) : String.join(", ", compra.getEtiquetasNumeros()));
+        variables.put("4", etiquetasCompra(compra));
         variables.put("5", dinero(compra.getTotal()));
         variables.put("6", compra.getRifa().getAliasTransferencia());
         variables.put("7", esVacio(cliente.getWhatsappConsultas()) ? "" : "https://wa.me/" + cliente.getWhatsappConsultas());
@@ -212,9 +212,7 @@ public class TwilioWhatsappServicio {
         String consultas = esVacio(cliente.getWhatsappConsultas())
                 ? ""
                 : "\nSi tenes alguna duda contactate aca: https://wa.me/" + cliente.getWhatsappConsultas();
-        String filasONumeros = compra.getEtiquetasNumeros().isEmpty()
-                ? numerosCompra(compra)
-                : String.join(", ", compra.getEtiquetasNumeros());
+        String filasONumeros = etiquetasCompra(compra);
         return "Hola " + compra.getComprador().getNombre()
                 + ", jugaste las Filas/numeros: " + filasONumeros
                 + " en " + compra.getRifa().getTitulo() + "."
@@ -228,9 +226,26 @@ public class TwilioWhatsappServicio {
     private String numerosCompra(Compra compra) {
         return compra.getNumeros().stream()
                 .sorted(Comparator.comparing(NumeroRifa::getValor))
-                .map(NumeroRifa::getEtiqueta)
+                .map(numero -> numero.getNumerosIncluidos().size() > 1
+                        ? String.join("-", numero.getNumerosIncluidos())
+                        : numero.getEtiqueta())
                 .toList()
                 .stream()
+                .reduce((a, b) -> a + ", " + b)
+                .orElse("");
+    }
+
+    private String etiquetasCompra(Compra compra) {
+        if (compra.getEtiquetasNumeros().isEmpty()) {
+            return numerosCompra(compra);
+        }
+        return compra.getEtiquetasNumeros().stream()
+                .map(etiqueta -> {
+                    int inicioGrupo = etiqueta.indexOf(" (");
+                    return inicioGrupo >= 0 && etiqueta.endsWith(")")
+                            ? etiqueta.substring(inicioGrupo + 2, etiqueta.length() - 1)
+                            : etiqueta;
+                })
                 .reduce((a, b) -> a + ", " + b)
                 .orElse("");
     }

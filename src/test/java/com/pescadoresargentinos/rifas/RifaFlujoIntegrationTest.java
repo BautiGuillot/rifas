@@ -58,6 +58,90 @@ class RifaFlujoIntegrationTest {
     }
 
     @Test
+    void permiteTextosLargosEnTituloDescripcionYAclaracion() throws Exception {
+        String token = crearClienteYLogin("textos-largos");
+        String titulo = "T".repeat(300);
+        String descripcion = "D".repeat(3000);
+        String aclaracion = "A".repeat(3000);
+
+        mockMvc.perform(post("/api/admin/rifas")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "titulo": "%s",
+                                  "slug": "rifa-textos-largos-%s",
+                                  "descripcion": "%s",
+                                  "aclaracionSorteo": "%s",
+                                  "cantidadNumeros": 1,
+                                  "numerosPorFila": 1,
+                                  "numeroInicial": 0,
+                                  "cantidadGanadores": 1,
+                                  "valorNumero": 1000,
+                                  "aliasTransferencia": "textos.largos",
+                                  "whatsappComprobante": "5491112345678",
+                                  "premios": [{"posicion": 1, "descripcion": "Premio"}]
+                                }
+                                """.formatted(
+                                titulo,
+                                UUID.randomUUID().toString().substring(0, 8),
+                                descripcion,
+                                aclaracion)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.titulo").value(titulo))
+                .andExpect(jsonPath("$.descripcion").value(descripcion))
+                .andExpect(jsonPath("$.aclaracionSorteo").value(aclaracion));
+    }
+
+    @Test
+    void permiteVariasOpcionesPorCadaPremio() throws Exception {
+        String token = crearClienteYLogin("premio-opciones");
+
+        mockMvc.perform(post("/api/admin/rifas")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "titulo": "Rifa con opciones de premios",
+                                  "slug": "rifa-premio-opciones-%s",
+                                  "cantidadNumeros": 2,
+                                  "numerosPorFila": 1,
+                                  "numeroInicial": 0,
+                                  "cantidadGanadores": 2,
+                                  "valorNumero": 1000,
+                                  "aliasTransferencia": "premios.opciones",
+                                  "whatsappComprobante": "5491112345678",
+                                  "premios": [
+                                    {
+                                      "posicion": 1,
+                                      "opciones": [
+                                        {"descripcion": "Premio A", "imagenUrl": "/media/a.webp"},
+                                        {"descripcion": "Premio B"},
+                                        {"descripcion": "Premio C"}
+                                      ]
+                                    },
+                                    {
+                                      "posicion": 2,
+                                      "opciones": [
+                                        {"descripcion": "Premio D"},
+                                        {"descripcion": "Premio E"},
+                                        {"descripcion": "Premio F"}
+                                      ]
+                                    }
+                                  ]
+                                }
+                                """.formatted(UUID.randomUUID().toString().substring(0, 8))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.premios", hasSize(2)))
+                .andExpect(jsonPath("$.premios[0].opciones", hasSize(3)))
+                .andExpect(jsonPath("$.premios[0].opciones[0].descripcion").value("Premio A"))
+                .andExpect(jsonPath("$.premios[0].opciones[0].imagenUrl").value("/media/a.webp"))
+                .andExpect(jsonPath("$.premios[0].opciones[2].descripcion").value("Premio C"))
+                .andExpect(jsonPath("$.premios[1].opciones", hasSize(3)))
+                .andExpect(jsonPath("$.premios[1].opciones[2].descripcion").value("Premio F"));
+    }
+
+    @Test
     void endpointPublicoDeMediaNoPermiteAccederAComprobantes() throws Exception {
         mockMvc.perform(get(
                         "/api/media/comprobantes/1/123e4567-e89b-42d3-a456-426614174000.pdf"
@@ -235,6 +319,23 @@ class RifaFlujoIntegrationTest {
                 .findFirst()
                 .map(body -> com.jayway.jsonpath.JsonPath.<Integer>read(body, "$.id"))
                 .orElseThrow();
+
+        mockMvc.perform(get("/api/rifas/{id}", rifaId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.numeros[0].estado").value("PENDIENTE"))
+                .andExpect(jsonPath("$.numeros[1].estado").value("PENDIENTE"));
+
+        mockMvc.perform(patch("/api/admin/compras/{id}/aprobar", compraId)
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.estado").value("APROBADA"));
+
+        mockMvc.perform(patch("/api/admin/compras/{id}/estado", compraId)
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"estado\":\"PENDIENTE_PAGO\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.estado").value("PENDIENTE_PAGO"));
 
         mockMvc.perform(get("/api/rifas/{id}", rifaId))
                 .andExpect(status().isOk())
@@ -580,7 +681,8 @@ class RifaFlujoIntegrationTest {
         mockMvc.perform(post("/api/rifas/slug/{slug}/compras", slug)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(compra))
-                .andExpect(status().isOk());
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.numeros[0]").value(String.join("-", primeraFila)));
     }
 
     private String crearClienteYLogin(String prefijo) throws Exception {

@@ -1,6 +1,5 @@
 package com.pescadoresargentinos.rifas.dominio;
 
-import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
@@ -9,13 +8,12 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
-import jakarta.persistence.OneToMany;
-import jakarta.persistence.OrderBy;
-import java.util.ArrayList;
-import java.util.List;
+import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
 
 @Entity
-public class Premio {
+@Table(uniqueConstraints = @UniqueConstraint(columnNames = {"premio_id", "orden"}))
+public class PremioOpcion {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -23,10 +21,10 @@ public class Premio {
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(nullable = false)
-    private Rifa rifa;
+    private Premio premio;
 
     @Column(nullable = false)
-    private Integer posicion;
+    private Integer orden;
 
     @Column(nullable = false, columnDefinition = "TEXT")
     private String descripcion;
@@ -34,28 +32,24 @@ public class Premio {
     @Column(length = 1024)
     private String imagenUrl;
 
-    @OneToMany(mappedBy = "premio", cascade = CascadeType.ALL, orphanRemoval = true)
-    @OrderBy("orden ASC")
-    private List<PremioOpcion> opciones = new ArrayList<>();
-
     public Long getId() {
         return id;
     }
 
-    public Rifa getRifa() {
-        return rifa;
+    public Premio getPremio() {
+        return premio;
     }
 
-    public void setRifa(Rifa rifa) {
-        this.rifa = rifa;
+    public void setPremio(Premio premio) {
+        this.premio = premio;
     }
 
-    public Integer getPosicion() {
-        return posicion;
+    public Integer getOrden() {
+        return orden;
     }
 
-    public void setPosicion(Integer posicion) {
-        this.posicion = posicion;
+    public void setOrden(Integer orden) {
+        this.orden = orden;
     }
 
     public String getDescripcion() {
@@ -72,9 +66,5 @@ public class Premio {
 
     public void setImagenUrl(String imagenUrl) {
         this.imagenUrl = imagenUrl;
-    }
-
-    public List<PremioOpcion> getOpciones() {
-        return opciones;
     }
 }

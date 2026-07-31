@@ -166,6 +166,14 @@ public class ClienteServicio {
                 compradorId
         ));
         jdbcTemplate.update("delete from numero_rifa where rifa_id in (select id from rifa where cliente_id = ?)", id);
+        jdbcTemplate.update("""
+                delete from premio_opcion
+                where premio_id in (
+                    select p.id from premio p
+                    join rifa r on r.id = p.rifa_id
+                    where r.cliente_id = ?
+                )
+                """, id);
         jdbcTemplate.update("delete from premio where rifa_id in (select id from rifa where cliente_id = ?)", id);
         jdbcTemplate.update("delete from rifa where cliente_id = ?", id);
         jdbcTemplate.update("delete from alias_cobro where cliente_id = ?", id);

@@ -139,8 +139,51 @@ public class CompraServicio {
     public CompraResponse cancelar(Long compraId) {
         Compra compra = buscarCompra(compraId);
         validarPropiedad(compra);
+        if (compra.getEstado() != EstadoCompra.PENDIENTE_PAGO && compra.getEstado() != EstadoCompra.APROBADA) {
+            throw new IllegalStateException("Solo se pueden cancelar compras pendientes o aprobadas");
+        }
+        cancelarPendiente(compra);
+        return aResponse(compra);
+    }
+
+    @Transactional
+    public CompraResponse actualizarEstado(Long compraId, EstadoCompra estadoDestino) {
+        Compra compra = buscarCompra(compraId);
+        validarPropiedad(compra);
+        if (compra.getEstado() == estadoDestino) {
+            return aResponse(compra);
+        }
+        return switch (estadoDestino) {
+            case APROBADA -> aprobarDesdeCambioDeEstado(compra);
+            case PENDIENTE_PAGO -> volverAPendiente(compra);
+            case CANCELADA -> cancelarDesdeCambioDeEstado(compra);
+        };
+    }
+
+    private CompraResponse aprobarDesdeCambioDeEstado(Compra compra) {
         if (compra.getEstado() != EstadoCompra.PENDIENTE_PAGO) {
-            throw new IllegalStateException("Solo se pueden cancelar compras pendientes");
+            throw new IllegalStateException("Solo se puede aprobar una compra pendiente");
+        }
+        compra.setEstado(EstadoCompra.APROBADA);
+        compra.setFechaResolucion(LocalDateTime.now());
+        compra.getNumeros().forEach(numero -> numero.setEstado(EstadoNumero.VENDIDO));
+        return aResponse(compra);
+    }
+
+    private CompraResponse volverAPendiente(Compra compra) {
+        if (compra.getEstado() != EstadoCompra.APROBADA) {
+            throw new IllegalStateException("Solo se puede volver a pendiente una compra aprobada");
+        }
+        compra.setEstado(EstadoCompra.PENDIENTE_PAGO);
+        compra.setFechaResolucion(null);
+        compra.setFechaExpiracion(LocalDateTime.now().plusMinutes(5));
+        compra.getNumeros().forEach(numero -> numero.setEstado(EstadoNumero.PENDIENTE));
+        return aResponse(compra);
+    }
+
+    private CompraResponse cancelarDesdeCambioDeEstado(Compra compra) {
+        if (compra.getEstado() != EstadoCompra.PENDIENTE_PAGO && compra.getEstado() != EstadoCompra.APROBADA) {
+            throw new IllegalStateException("Solo se puede cancelar una compra pendiente o aprobada");
         }
         cancelarPendiente(compra);
         return aResponse(compra);
@@ -340,7 +383,10 @@ public class CompraServicio {
                 .map(this::etiquetaCompra)
                 .toList();
         if (numeros.isEmpty()) {
-            numeros = compra.getEtiquetasNumeros().stream().sorted().toList();
+            numeros = compra.getEtiquetasNumeros().stream()
+                    .map(this::normalizarEtiquetaAgrupada)
+                    .sorted()
+                    .toList();
         }
 
         return new CompraResponse(
@@ -375,7 +421,15 @@ public class CompraServicio {
         if (numero.getNumerosIncluidos().size() <= 1) {
             return numero.getEtiqueta();
         }
-        return numero.getEtiqueta() + " (" + String.join("-", numero.getNumerosIncluidos()) + ")";
+        return String.join("-", numero.getNumerosIncluidos());
+    }
+
+    private String normalizarEtiquetaAgrupada(String etiqueta) {
+        int inicioGrupo = etiqueta.indexOf(" (");
+        if (inicioGrupo >= 0 && etiqueta.endsWith(")")) {
+            return etiqueta.substring(inicioGrupo + 2, etiqueta.length() - 1);
+        }
+        return etiqueta;
     }
 
     private String normalizarTelefonoComprador(String telefono) {

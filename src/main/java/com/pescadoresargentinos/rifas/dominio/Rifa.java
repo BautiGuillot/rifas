@@ -24,7 +24,7 @@ public class Rifa {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(nullable = false)
+    @Column(nullable = false, columnDefinition = "TEXT")
     private String titulo;
 
     @Column(nullable = false, unique = true)
@@ -38,10 +38,10 @@ public class Rifa {
     @JoinColumn(name = "alias_cobro_id")
     private AliasCobro aliasCobro;
 
-    @Column(length = 2000)
+    @Column(columnDefinition = "TEXT")
     private String descripcion;
 
-    @Column(length = 2000)
+    @Column(columnDefinition = "TEXT")
     private String aclaracionSorteo;
 
     @Column(nullable = false)

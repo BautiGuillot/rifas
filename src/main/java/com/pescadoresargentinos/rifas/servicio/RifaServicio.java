@@ -6,6 +6,9 @@ import com.pescadoresargentinos.rifas.api.dto.DashboardAdminResponse;
 import com.pescadoresargentinos.rifas.api.dto.EditarRifaRequest;
 import com.pescadoresargentinos.rifas.api.dto.GanadorResponse;
 import com.pescadoresargentinos.rifas.api.dto.NumeroResponse;
+import com.pescadoresargentinos.rifas.api.dto.PremioOpcionRequest;
+import com.pescadoresargentinos.rifas.api.dto.PremioOpcionResponse;
+import com.pescadoresargentinos.rifas.api.dto.PremioRequest;
 import com.pescadoresargentinos.rifas.api.dto.PremioResponse;
 import com.pescadoresargentinos.rifas.api.dto.RifaDetalleResponse;
 import com.pescadoresargentinos.rifas.api.dto.RifaResumenResponse;
@@ -19,6 +22,7 @@ import com.pescadoresargentinos.rifas.dominio.EstadoRifa;
 import com.pescadoresargentinos.rifas.dominio.Ganador;
 import com.pescadoresargentinos.rifas.dominio.NumeroRifa;
 import com.pescadoresargentinos.rifas.dominio.Premio;
+import com.pescadoresargentinos.rifas.dominio.PremioOpcion;
 import com.pescadoresargentinos.rifas.dominio.Rifa;
 import com.pescadoresargentinos.rifas.repositorio.GanadorRepositorio;
 import com.pescadoresargentinos.rifas.repositorio.CompraRepositorio;
@@ -92,14 +96,7 @@ public class RifaServicio {
         rifa.setWhatsappComprobante(normalizarTelefono(request.whatsappComprobante()));
         rifa.setFechaSorteo(request.fechaSorteo());
 
-        request.premios().forEach(premioRequest -> {
-            Premio premio = new Premio();
-            premio.setRifa(rifa);
-            premio.setPosicion(premioRequest.posicion());
-            premio.setDescripcion(premioRequest.descripcion());
-            premio.setImagenUrl(normalizarTextoOpcional(premioRequest.imagenUrl()));
-            rifa.getPremios().add(premio);
-        });
+        request.premios().forEach(premioRequest -> agregarPremio(rifa, premioRequest));
 
         generarNumeros(rifa, request.cantidadNumeros(), rifa.getCantidadFilas(), request.numeroInicial());
 
@@ -141,14 +138,7 @@ public class RifaServicio {
         rifa.getNumeros().clear();
         rifaRepositorio.flush();
 
-        request.premios().forEach(premioRequest -> {
-            Premio premio = new Premio();
-            premio.setRifa(rifa);
-            premio.setPosicion(premioRequest.posicion());
-            premio.setDescripcion(premioRequest.descripcion());
-            premio.setImagenUrl(normalizarTextoOpcional(premioRequest.imagenUrl()));
-            rifa.getPremios().add(premio);
-        });
+        request.premios().forEach(premioRequest -> agregarPremio(rifa, premioRequest));
 
         generarNumeros(rifa, request.cantidadNumeros(), rifa.getCantidadFilas(), request.numeroInicial());
 
@@ -397,7 +387,7 @@ public class RifaServicio {
         }
     }
 
-    private void validarPremios(Integer cantidadGanadores, List<com.pescadoresargentinos.rifas.api.dto.PremioRequest> premios) {
+    private void validarPremios(Integer cantidadGanadores, List<PremioRequest> premios) {
         if (premios.size() != cantidadGanadores) {
             throw new IllegalArgumentException("La cantidad de premios debe coincidir con la cantidad de ganadores");
         }
@@ -410,6 +400,7 @@ public class RifaServicio {
             if (premio.posicion() > cantidadGanadores) {
                 throw new IllegalArgumentException("La posicion del premio excede la cantidad de ganadores");
             }
+            opcionesEfectivas(premio);
         });
     }
 
@@ -514,8 +505,71 @@ public class RifaServicio {
     private List<PremioResponse> premiosOrdenados(Rifa rifa) {
         return rifa.getPremios().stream()
                 .sorted(Comparator.comparing(Premio::getPosicion))
-                .map(premio -> new PremioResponse(premio.getId(), premio.getPosicion(), premio.getDescripcion(), premio.getImagenUrl()))
+                .map(this::aPremioResponse)
                 .toList();
+    }
+
+    private PremioResponse aPremioResponse(Premio premio) {
+        List<PremioOpcionResponse> opciones = premio.getOpciones().stream()
+                .sorted(Comparator.comparing(PremioOpcion::getOrden))
+                .map(opcion -> new PremioOpcionResponse(
+                        opcion.getId(),
+                        opcion.getOrden(),
+                        opcion.getDescripcion(),
+                        opcion.getImagenUrl()
+                ))
+                .toList();
+        if (opciones.isEmpty()) {
+            opciones = List.of(new PremioOpcionResponse(
+                    null,
+                    1,
+                    premio.getDescripcion(),
+                    premio.getImagenUrl()
+            ));
+        }
+        return new PremioResponse(
+                premio.getId(),
+                premio.getPosicion(),
+                premio.getDescripcion(),
+                premio.getImagenUrl(),
+                opciones
+        );
+    }
+
+    private void agregarPremio(Rifa rifa, PremioRequest request) {
+        List<PremioOpcionRequest> opciones = opcionesEfectivas(request);
+        PremioOpcionRequest opcionPrincipal = opciones.getFirst();
+
+        Premio premio = new Premio();
+        premio.setRifa(rifa);
+        premio.setPosicion(request.posicion());
+        premio.setDescripcion(opcionPrincipal.descripcion().trim());
+        premio.setImagenUrl(normalizarTextoOpcional(opcionPrincipal.imagenUrl()));
+
+        for (int indice = 0; indice < opciones.size(); indice++) {
+            PremioOpcionRequest opcionRequest = opciones.get(indice);
+            PremioOpcion opcion = new PremioOpcion();
+            opcion.setPremio(premio);
+            opcion.setOrden(indice + 1);
+            opcion.setDescripcion(opcionRequest.descripcion().trim());
+            opcion.setImagenUrl(normalizarTextoOpcional(opcionRequest.imagenUrl()));
+            premio.getOpciones().add(opcion);
+        }
+        rifa.getPremios().add(premio);
+    }
+
+    private List<PremioOpcionRequest> opcionesEfectivas(PremioRequest premio) {
+        if (premio.opciones() != null && !premio.opciones().isEmpty()) {
+            if (premio.opciones().stream().anyMatch(opcion ->
+                    opcion == null || opcion.descripcion() == null || opcion.descripcion().isBlank())) {
+                throw new IllegalArgumentException("Todas las opciones de premio deben tener una descripcion");
+            }
+            return premio.opciones();
+        }
+        if (premio.descripcion() == null || premio.descripcion().isBlank()) {
+            throw new IllegalArgumentException("Cada premio debe tener al menos una opcion");
+        }
+        return List.of(new PremioOpcionRequest(premio.descripcion(), premio.imagenUrl()));
     }
 
     private String normalizarTextoOpcional(String valor) {
@@ -547,10 +601,17 @@ public class RifaServicio {
     }
 
     private GanadorResponse aGanadorResponse(Ganador ganador) {
+        PremioResponse premio = aPremioResponse(ganador.getPremio());
+        String descripcionPremio = premio.opciones().size() == 1
+                ? premio.opciones().getFirst().descripcion()
+                : "Puede elegir entre: " + String.join(
+                        ", ",
+                        premio.opciones().stream().map(PremioOpcionResponse::descripcion).toList()
+                );
         return new GanadorResponse(
                 ganador.getPosicion(),
                 ganador.getNumero().getEtiqueta(),
-                ganador.getPremio().getDescripcion(),
+                descripcionPremio,
                 ganador.getNumero().getCompra().getComprador().getNombre(),
                 ganador.getNumero().getCompra().getComprador().getTelefono()
         );

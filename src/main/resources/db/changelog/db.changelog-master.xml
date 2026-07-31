@@ -428,4 +428,44 @@
         </sql>
         <addNotNullConstraint tableName="rifa" columnName="numero_inicial" columnDataType="INT"/>
     </changeSet>
+
+    <changeSet id="017-remove-rifa-text-length-limits" author="codex">
+        <modifyDataType tableName="rifa" columnName="titulo" newDataType="TEXT"/>
+        <modifyDataType tableName="rifa" columnName="descripcion" newDataType="TEXT"/>
+        <modifyDataType tableName="rifa" columnName="aclaracion_sorteo" newDataType="TEXT"/>
+    </changeSet>
+
+    <changeSet id="018-add-premio-opciones" author="codex">
+        <modifyDataType tableName="premio" columnName="descripcion" newDataType="TEXT"/>
+        <createTable tableName="premio_opcion">
+            <column name="id" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="premio_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="orden" type="INT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="descripcion" type="TEXT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="imagen_url" type="VARCHAR(1024)"/>
+        </createTable>
+        <addForeignKeyConstraint
+                baseTableName="premio_opcion"
+                baseColumnNames="premio_id"
+                referencedTableName="premio"
+                referencedColumnNames="id"
+                constraintName="fk_premio_opcion_premio"/>
+        <addUniqueConstraint
+                tableName="premio_opcion"
+                columnNames="premio_id, orden"
+                constraintName="uk_premio_opcion_orden"/>
+        <sql>
+            insert into premio_opcion (premio_id, orden, descripcion, imagen_url)
+            select id, 1, descripcion, imagen_url
+            from premio
+        </sql>
+    </changeSet>
 </databaseChangeLog>
