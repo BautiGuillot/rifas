@@ -2,13 +2,26 @@ package com.pescadoresargentinos.rifas.servicio.twilio;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.pescadoresargentinos.rifas.configuracion.TwilioProperties;
+import java.io.ByteArrayInputStream;
+import java.io.InputStream;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.net.http.HttpHeaders;
+import java.nio.charset.StandardCharsets;
+import java.util.List;
+import java.util.Map;
 import java.util.Base64;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.web.client.RestClient;
 
@@ -53,6 +66,62 @@ class TwilioWhatsappServicioTest {
                 "https://api.twilio.com/2010-04-01/Accounts/" + ACCOUNT_SID
                         + "/Messages/SM0123456789abcdef0123456789abcdef/Media/ME0123456789abcdef0123456789abcdef"
         ).getHost()).isEqualTo("api.twilio.com");
+    }
+
+    @Test
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    void sigueLaRedireccionSeguraDeTwilioSinReenviarLasCredenciales() throws Exception {
+        HttpClient httpClient = mock(HttpClient.class);
+        HttpResponse<InputStream> redireccion = mock(HttpResponse.class);
+        HttpResponse<InputStream> archivo = mock(HttpResponse.class);
+        String cdnUrl = "https://mms.twiliocdn.com/media/documento?Signature=firma";
+        byte[] contenido = "comprobante".getBytes(StandardCharsets.UTF_8);
+
+        when(redireccion.statusCode()).thenReturn(307);
+        when(redireccion.headers()).thenReturn(HttpHeaders.of(Map.of("Location", List.of(cdnUrl)), (a, b) -> true));
+        when(redireccion.body()).thenReturn(new ByteArrayInputStream(new byte[0]));
+        when(archivo.statusCode()).thenReturn(200);
+        when(archivo.headers()).thenReturn(HttpHeaders.of(Map.of("Content-Length", List.of(String.valueOf(contenido.length))), (a, b) -> true));
+        when(archivo.body()).thenReturn(new ByteArrayInputStream(contenido));
+        when(httpClient.send(any(HttpRequest.class), any(HttpResponse.BodyHandler.class)))
+                .thenReturn(redireccion, archivo);
+
+        TwilioWhatsappServicio servicio = new TwilioWhatsappServicio(
+                properties(), new ObjectMapper(), RestClient.builder(), httpClient
+        );
+        String mediaUrl = "https://api.twilio.com/2010-04-01/Accounts/" + ACCOUNT_SID
+                + "/Messages/MM0123456789abcdef0123456789abcdef/Media/ME0123456789abcdef0123456789abcdef";
+
+        assertThat(servicio.descargarMedia(mediaUrl)).isEqualTo(contenido);
+
+        ArgumentCaptor<HttpRequest> requests = ArgumentCaptor.forClass(HttpRequest.class);
+        org.mockito.Mockito.verify(httpClient, org.mockito.Mockito.times(2))
+                .send(requests.capture(), any(HttpResponse.BodyHandler.class));
+        assertThat(requests.getAllValues().get(0).headers().firstValue("Authorization")).isPresent();
+        assertThat(requests.getAllValues().get(1).uri().toString()).isEqualTo(cdnUrl);
+        assertThat(requests.getAllValues().get(1).headers().firstValue("Authorization")).isEmpty();
+    }
+
+    @Test
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    void rechazaRedireccionesDeMediaFueraDelCdnDeTwilio() throws Exception {
+        HttpClient httpClient = mock(HttpClient.class);
+        HttpResponse<InputStream> redireccion = mock(HttpResponse.class);
+        when(redireccion.statusCode()).thenReturn(302);
+        when(redireccion.headers()).thenReturn(HttpHeaders.of(
+                Map.of("Location", List.of("https://evil.example/documento")), (a, b) -> true
+        ));
+        when(redireccion.body()).thenReturn(new ByteArrayInputStream(new byte[0]));
+        when(httpClient.send(any(HttpRequest.class), any(HttpResponse.BodyHandler.class))).thenReturn(redireccion);
+        TwilioWhatsappServicio servicio = new TwilioWhatsappServicio(
+                properties(), new ObjectMapper(), RestClient.builder(), httpClient
+        );
+        String mediaUrl = "https://api.twilio.com/2010-04-01/Accounts/" + ACCOUNT_SID
+                + "/Messages/MM0123456789abcdef0123456789abcdef/Media/ME0123456789abcdef0123456789abcdef";
+
+        assertThatThrownBy(() -> servicio.descargarMedia(mediaUrl))
+                .isInstanceOf(SecurityException.class)
+                .hasMessage("Redireccion de media de Twilio invalida");
     }
 
     private TwilioWhatsappServicio servicio(TwilioProperties properties) {

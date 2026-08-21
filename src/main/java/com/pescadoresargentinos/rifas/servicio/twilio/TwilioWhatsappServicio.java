@@ -24,6 +24,7 @@ import java.util.LinkedHashMap;
 import java.util.Locale;
 import java.util.Map;
 import java.util.regex.Pattern;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
 import org.springframework.util.LinkedMultiValueMap;
@@ -44,14 +45,24 @@ public class TwilioWhatsappServicio {
     private final RestClient restClient;
     private final HttpClient mediaHttpClient;
 
+    @Autowired
     public TwilioWhatsappServicio(TwilioProperties properties, ObjectMapper objectMapper, RestClient.Builder restClientBuilder) {
+        this(properties, objectMapper, restClientBuilder, HttpClient.newBuilder()
+                .connectTimeout(MEDIA_CONNECT_TIMEOUT)
+                .followRedirects(HttpClient.Redirect.NEVER)
+                .build());
+    }
+
+    TwilioWhatsappServicio(
+            TwilioProperties properties,
+            ObjectMapper objectMapper,
+            RestClient.Builder restClientBuilder,
+            HttpClient mediaHttpClient
+    ) {
         this.properties = properties;
         this.objectMapper = objectMapper;
         this.restClient = restClientBuilder.build();
-        this.mediaHttpClient = HttpClient.newBuilder()
-                .connectTimeout(MEDIA_CONNECT_TIMEOUT)
-                .followRedirects(HttpClient.Redirect.NEVER)
-                .build();
+        this.mediaHttpClient = mediaHttpClient;
     }
 
     public TwilioEnvioResultado enviarMensajeCompra(Compra compra) {
@@ -110,6 +121,15 @@ public class TwilioWhatsappServicio {
                 .build();
         try {
             HttpResponse<InputStream> response = mediaHttpClient.send(request, HttpResponse.BodyHandlers.ofInputStream());
+            if (esRedireccion(response.statusCode())) {
+                response.body().close();
+                URI redireccion = validarRedireccionMedia(uri, response);
+                HttpRequest requestCdn = HttpRequest.newBuilder(redireccion)
+                        .timeout(MEDIA_REQUEST_TIMEOUT)
+                        .GET()
+                        .build();
+                response = mediaHttpClient.send(requestCdn, HttpResponse.BodyHandlers.ofInputStream());
+            }
             if (response.statusCode() < 200 || response.statusCode() >= 300) {
                 response.body().close();
                 throw new IllegalStateException("Twilio no devolvio el archivo solicitado");
@@ -131,6 +151,33 @@ public class TwilioWhatsappServicio {
             throw new IllegalStateException("Se interrumpio la descarga del comprobante");
         } catch (IOException ex) {
             throw new IllegalStateException("No se pudo descargar el comprobante desde Twilio");
+        }
+    }
+
+    private boolean esRedireccion(int statusCode) {
+        return statusCode == 301
+                || statusCode == 302
+                || statusCode == 303
+                || statusCode == 307
+                || statusCode == 308;
+    }
+
+    private URI validarRedireccionMedia(URI origen, HttpResponse<?> response) {
+        String location = response.headers().firstValue("Location")
+                .orElseThrow(() -> new SecurityException("Redireccion de media de Twilio invalida"));
+        try {
+            URI uri = origen.resolve(location);
+            boolean segura = "https".equalsIgnoreCase(uri.getScheme())
+                    && "mms.twiliocdn.com".equalsIgnoreCase(uri.getHost())
+                    && (uri.getPort() == -1 || uri.getPort() == 443)
+                    && uri.getRawUserInfo() == null
+                    && uri.getRawFragment() == null;
+            if (!segura) {
+                throw new SecurityException("Redireccion de media de Twilio invalida");
+            }
+            return uri;
+        } catch (IllegalArgumentException ex) {
+            throw new SecurityException("Redireccion de media de Twilio invalida");
         }
     }
 

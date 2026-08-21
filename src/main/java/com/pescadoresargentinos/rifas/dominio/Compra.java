@@ -50,6 +50,17 @@ public class Compra {
     private LocalDateTime fechaCreacion = LocalDateTime.now();
 
     @Column(nullable = false)
+    private Boolean consentimientoLegalAceptado = false;
+
+    private LocalDateTime fechaConsentimientoLegal;
+
+    @Column(length = 20)
+    private String versionCondicionesParticipacion;
+
+    @Column(length = 20)
+    private String versionPoliticaPrivacidad;
+
+    @Column(nullable = false)
     private LocalDateTime fechaExpiracion;
 
     @Column(length = 64, unique = true)
@@ -121,6 +132,38 @@ public class Compra {
 
     public LocalDateTime getFechaCreacion() {
         return fechaCreacion;
+    }
+
+    public Boolean getConsentimientoLegalAceptado() {
+        return consentimientoLegalAceptado;
+    }
+
+    public void setConsentimientoLegalAceptado(Boolean consentimientoLegalAceptado) {
+        this.consentimientoLegalAceptado = consentimientoLegalAceptado;
+    }
+
+    public LocalDateTime getFechaConsentimientoLegal() {
+        return fechaConsentimientoLegal;
+    }
+
+    public void setFechaConsentimientoLegal(LocalDateTime fechaConsentimientoLegal) {
+        this.fechaConsentimientoLegal = fechaConsentimientoLegal;
+    }
+
+    public String getVersionCondicionesParticipacion() {
+        return versionCondicionesParticipacion;
+    }
+
+    public void setVersionCondicionesParticipacion(String versionCondicionesParticipacion) {
+        this.versionCondicionesParticipacion = versionCondicionesParticipacion;
+    }
+
+    public String getVersionPoliticaPrivacidad() {
+        return versionPoliticaPrivacidad;
+    }
+
+    public void setVersionPoliticaPrivacidad(String versionPoliticaPrivacidad) {
+        this.versionPoliticaPrivacidad = versionPoliticaPrivacidad;
     }
 
     public LocalDateTime getFechaExpiracion() {

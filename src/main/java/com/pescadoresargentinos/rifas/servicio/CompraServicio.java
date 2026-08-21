@@ -35,6 +35,9 @@ import org.springframework.web.multipart.MultipartFile;
 @Service
 public class CompraServicio {
 
+    private static final String VERSION_CONDICIONES_PARTICIPACION = "2026-08-21";
+    private static final String VERSION_POLITICA_PRIVACIDAD = "2026-08-21";
+
     private final CompraRepositorio compraRepositorio;
     private final RifaRepositorio rifaRepositorio;
     private final NumeroRifaRepositorio numeroRifaRepositorio;
@@ -60,6 +63,9 @@ public class CompraServicio {
 
     @Transactional
     public CompraResponse crear(Long rifaId, CrearCompraRequest request) {
+        if (!Boolean.TRUE.equals(request.aceptaCondiciones())) {
+            throw new IllegalArgumentException("Debes aceptar las condiciones de participación y la política de privacidad");
+        }
         Rifa rifa = rifaRepositorio.findById(rifaId)
                 .orElseThrow(() -> new IllegalArgumentException("No existe la rifa " + rifaId));
         if (rifa.getEstado() != EstadoRifa.PUBLICADA) {
@@ -92,6 +98,10 @@ public class CompraServicio {
         compra.setTotal(rifa.getValorNumero().multiply(java.math.BigDecimal.valueOf(numeros.size())));
         compra.setFechaExpiracion(LocalDateTime.now().plusMinutes(5));
         compra.setTokenSeguimiento(UUID.randomUUID().toString());
+        compra.setConsentimientoLegalAceptado(true);
+        compra.setFechaConsentimientoLegal(LocalDateTime.now());
+        compra.setVersionCondicionesParticipacion(VERSION_CONDICIONES_PARTICIPACION);
+        compra.setVersionPoliticaPrivacidad(VERSION_POLITICA_PRIVACIDAD);
         compra = compraRepositorio.save(compra);
 
         for (NumeroRifa numero : numeros) {

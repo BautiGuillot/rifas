@@ -7,8 +7,10 @@ import com.pescadoresargentinos.rifas.servicio.CompraServicio;
 import com.pescadoresargentinos.rifas.servicio.storage.ArchivoSeguro;
 import com.pescadoresargentinos.rifas.servicio.storage.ComprobanteArchivo;
 import java.net.URI;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 import jakarta.validation.Valid;
+import org.springframework.http.ContentDisposition;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -63,13 +65,14 @@ public class AdminCompraController {
                     MediaType contentType = imagenSegura
                             ? MediaType.parseMediaType(ArchivoSeguro.normalizarContentType(archivo.contentType()))
                             : MediaType.APPLICATION_OCTET_STREAM;
+                    ContentDisposition disposition = (imagenSegura
+                            ? ContentDisposition.inline()
+                            : ContentDisposition.attachment())
+                            .filename(archivo.nombreArchivo(), StandardCharsets.UTF_8)
+                            .build();
                     return ResponseEntity.ok()
                             .contentType(contentType)
-                            .header(
-                                    HttpHeaders.CONTENT_DISPOSITION,
-                                    (imagenSegura ? "inline" : "attachment") + "; filename=\"comprobante"
-                                            + ArchivoSeguro.extension(archivo.contentType()) + "\""
-                            )
+                            .header(HttpHeaders.CONTENT_DISPOSITION, disposition.toString())
                             .header("Content-Security-Policy", "sandbox; default-src 'none'")
                             .body(archivo.resource());
                 });

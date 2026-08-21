@@ -197,7 +197,7 @@ class RifaFlujoIntegrationTest {
         mockMvc.perform(post("/api/rifas/{id}/compras", rifaId)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"nombre": "Comprador a borrar", "telefono": "1133334444", "numeros": [0]}
+                                {"nombre": "Comprador a borrar", "telefono": "1133334444", "aceptaCondiciones": true, "numeros": [0]}
                                 """))
                 .andExpect(status().isOk());
 
@@ -297,10 +297,18 @@ class RifaFlujoIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[0].id").value(rifaId));
 
+        mockMvc.perform(post("/api/rifas/slug/{slug}/compras", slugEditado)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"nombre": "Sin consentimiento", "telefono": "1133334444", "numeros": [0]}
+                                """))
+                .andExpect(status().isBadRequest());
+
         String compraJson = """
                 {
                   "nombre": "Juan Perez",
                   "telefono": "1133334444",
+                  "aceptaCondiciones": true,
                   "numeros": [0, 1]
                 }
                 """;
@@ -319,6 +327,13 @@ class RifaFlujoIntegrationTest {
                 .findFirst()
                 .map(body -> com.jayway.jsonpath.JsonPath.<Integer>read(body, "$.id"))
                 .orElseThrow();
+
+        assertEquals(true, jdbcTemplate.queryForObject(
+                "select consentimiento_legal_aceptado from compra where id = ?", Boolean.class, compraId));
+        assertEquals("2026-08-21", jdbcTemplate.queryForObject(
+                "select version_condiciones_participacion from compra where id = ?", String.class, compraId));
+        assertEquals("2026-08-21", jdbcTemplate.queryForObject(
+                "select version_politica_privacidad from compra where id = ?", String.class, compraId));
 
         mockMvc.perform(get("/api/rifas/{id}", rifaId))
                 .andExpect(status().isOk())
@@ -479,6 +494,7 @@ class RifaFlujoIntegrationTest {
                         {
                           "nombre": "Cliente",
                           "telefono": "1133334444",
+                          "aceptaCondiciones": true,
                           "numeros": [0]
                         }
                         """;
@@ -543,7 +559,7 @@ class RifaFlujoIntegrationTest {
         String compraResponse = mockMvc.perform(post("/api/rifas/slug/{slug}/compras", slug)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"nombre": "Comprador privado", "telefono": "1133334444", "numeros": [0]}
+                                {"nombre": "Comprador privado", "telefono": "1133334444", "aceptaCondiciones": true, "numeros": [0]}
                                 """))
                 .andExpect(status().isOk())
                 .andReturn().getResponse().getContentAsString();
@@ -675,6 +691,7 @@ class RifaFlujoIntegrationTest {
                 {
                   "nombre": "Comprador inicial",
                   "telefono": "1133334444",
+                  "aceptaCondiciones": true,
                   "numeros": [%d]
                 }
                 """.formatted(numeroInicial);

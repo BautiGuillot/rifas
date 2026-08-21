@@ -468,4 +468,15 @@
             from premio
         </sql>
     </changeSet>
+
+    <changeSet id="019-add-compra-consentimiento-legal" author="codex">
+        <addColumn tableName="compra">
+            <column name="consentimiento_legal_aceptado" type="BOOLEAN" defaultValueBoolean="false">
+                <constraints nullable="false"/>
+            </column>
+            <column name="fecha_consentimiento_legal" type="TIMESTAMP"/>
+            <column name="version_condiciones_participacion" type="VARCHAR(20)"/>
+            <column name="version_politica_privacidad" type="VARCHAR(20)"/>
+        </addColumn>
+    </changeSet>
 </databaseChangeLog>
