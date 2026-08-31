@@ -58,6 +58,25 @@ class RifaFlujoIntegrationTest {
     }
 
     @Test
+    void informaPorQueNoSePuedeCrearUnClienteConEspaciosEnElSlug() throws Exception {
+        mockMvc.perform(post("/api/super-admin/clientes")
+                        .header("Authorization", "Bearer " + login())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "nombre": "Cliente inválido",
+                                  "slug": "cliente con espacios",
+                                  "username": "cliente-invalido",
+                                  "password": "admin123"
+                                }
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value(
+                        "slug: Debe tener entre 3 y 80 caracteres y usar solo letras minúsculas, números o guiones, sin espacios"
+                ));
+    }
+
+    @Test
     void permiteTextosLargosEnTituloDescripcionYAclaracion() throws Exception {
         String token = crearClienteYLogin("textos-largos");
         String titulo = "T".repeat(300);
