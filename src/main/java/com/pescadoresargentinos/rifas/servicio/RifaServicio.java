@@ -496,7 +496,9 @@ public class RifaServicio {
                         numero.getValor(),
                         numero.getEtiqueta(),
                         new ArrayList<>(numero.getNumerosIncluidos()),
-                        numero.getEstado()
+                        numero.getEstado(),
+                        numero.getEstado() != EstadoNumero.DISPONIBLE && numero.getCompra() != null
+                                ? numero.getCompra().getComprador().getNombre() : null
                 )).toList(),
                 ganadores.stream().map(this::aGanadorResponse).toList()
         );

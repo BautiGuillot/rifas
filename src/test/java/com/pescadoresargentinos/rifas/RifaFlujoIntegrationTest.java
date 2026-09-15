@@ -357,7 +357,11 @@ class RifaFlujoIntegrationTest {
         mockMvc.perform(get("/api/rifas/{id}", rifaId))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.numeros[0].estado").value("PENDIENTE"))
-                .andExpect(jsonPath("$.numeros[1].estado").value("PENDIENTE"));
+                .andExpect(jsonPath("$.numeros[1].estado").value("PENDIENTE"))
+                .andExpect(jsonPath("$.numeros[0].compradorNombre").value("Juan Perez"))
+                .andExpect(jsonPath("$.numeros[1].compradorNombre").value("Juan Perez"))
+                .andExpect(jsonPath("$.numeros[2].compradorNombre").doesNotExist())
+                .andExpect(jsonPath("$.numeros[0].telefono").doesNotExist());
 
         mockMvc.perform(patch("/api/admin/compras/{id}/aprobar", compraId)
                         .header("Authorization", "Bearer " + token))
@@ -374,12 +378,21 @@ class RifaFlujoIntegrationTest {
         mockMvc.perform(get("/api/rifas/{id}", rifaId))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.numeros[0].estado").value("PENDIENTE"))
-                .andExpect(jsonPath("$.numeros[1].estado").value("PENDIENTE"));
+                .andExpect(jsonPath("$.numeros[1].estado").value("PENDIENTE"))
+                .andExpect(jsonPath("$.numeros[0].compradorNombre").value("Juan Perez"))
+                .andExpect(jsonPath("$.numeros[1].compradorNombre").value("Juan Perez"))
+                .andExpect(jsonPath("$.numeros[2].compradorNombre").doesNotExist())
+                .andExpect(jsonPath("$.numeros[0].telefono").doesNotExist());
 
         mockMvc.perform(patch("/api/admin/compras/{id}/aprobar", compraId)
                         .header("Authorization", "Bearer " + token))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.estado").value("APROBADA"));
+
+        mockMvc.perform(get("/api/rifas/slug/{slug}", slugEditado))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.numeros[0].estado").value("VENDIDO"))
+                .andExpect(jsonPath("$.numeros[0].compradorNombre").value("Juan Perez"));
 
         mockMvc.perform(get("/api/admin/rifas/dashboard")
                         .header("Authorization", "Bearer " + token))

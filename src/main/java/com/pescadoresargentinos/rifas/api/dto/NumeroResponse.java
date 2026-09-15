@@ -8,6 +8,7 @@ public record NumeroResponse(
         Integer valor,
         String etiqueta,
         List<String> numerosIncluidos,
-        EstadoNumero estado
+        EstadoNumero estado,
+        String compradorNombre
 ) {
 }
